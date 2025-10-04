@@ -13,7 +13,7 @@ Lawyers then **select articles/sections**, define a **prompt preset or custom in
 
 ## ✨ Key Features
 
-* **Jurisdiction selector** → country, state, city.
+* **Jurisdiction selector** → country, state (prefix), city.
 * **Public Markdown repository** of laws, organized by jurisdiction.
 * **Search & TOC navigation** to find and select relevant legal articles.
 * **Context panel**: compile selected excerpts into an analysis set.
@@ -75,7 +75,7 @@ legal-corpus/
 │     │  ├─ codigo-civil-2002.md
 │     │  └─ lei-inquilinato-8245-1991.md
 │     └─ state/
-│        └─ rs/
+│        └─ RS/
 │           └─ city/
 │              └─ porto-alegre/
 │                 └─ lei-organica-porto-alegre.md

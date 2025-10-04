@@ -109,7 +109,7 @@ describe('Home View and Settings Integration Tests', () => {
             settings: {
                 language: 'pt-BR',
                 country: 'br',
-                state: 'rs',
+                state: 'RS',
                 city: 'porto-alegre',
                 corpusUrl: 'https://raw.githubusercontent.com/example/legal-corpus/main'
             },
@@ -789,7 +789,7 @@ describe('Home View and Settings Integration Tests', () => {
             const newSettings = {
                 language: 'pt-BR',
                 country: 'br',
-                state: 'sao-paulo',
+                state: 'SP',
                 city: 'sao-paulo-city',
                 corpusUrl: 'https://brasil-legal.com/corpus'
             };
@@ -804,7 +804,7 @@ describe('Home View and Settings Integration Tests', () => {
             const persistedSettings = await mockDB.getSettings();
             expect(persistedSettings.language).toBe('pt-BR');
             expect(persistedSettings.country).toBe('br');
-            expect(persistedSettings.state).toBe('sao-paulo');
+            expect(persistedSettings.state).toBe('SP');
             expect(persistedSettings.city).toBe('sao-paulo-city');
             expect(persistedSettings.corpusUrl).toBe('https://brasil-legal.com/corpus');
         });
@@ -830,7 +830,7 @@ describe('Home View and Settings Integration Tests', () => {
             const initialSettings = {
                 language: 'pt-BR',
                 country: 'br',
-                state: 'rio-grande-do-sul',
+                state: 'RS',
                 city: 'porto-alegre'
             };
             

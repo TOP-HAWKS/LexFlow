@@ -1,4 +1,5 @@
 // LexFlow Service Worker (MV3)
+import { addSubmission } from "./db.js";
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('LexFlow installed.');
@@ -42,7 +43,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 // Receive capture payload from content script and store locally
-import { addSubmission } from "./db.js";
 chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
   if (msg?.type === "LEXFLOW_CAPTURE_PAYLOAD") {
     try {

@@ -444,8 +444,9 @@ class ToastSystem {
 }
 
 // Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = ToastSystem;
-} else {
+export default ToastSystem;
+
+// Also make available globally for backward compatibility
+if (typeof window !== 'undefined') {
     window.ToastSystem = ToastSystem;
 }

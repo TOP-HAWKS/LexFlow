@@ -72,8 +72,8 @@ class MockLexFlowApp {
                                 <option value="us">United States</option>
                             </select>
                             <select id="state" name="state">
-                                <option value="rs">Rio Grande do Sul</option>
-                                <option value="sp">São Paulo</option>
+                                <option value="RS">RS</option>
+                                <option value="SP">SP</option>
                             </select>
                             <input type="text" id="city" name="city" value="porto-alegre">
                             <input type="url" id="base-url" name="baseUrl" 
@@ -519,7 +519,7 @@ describe('Workspace Workflow Integration Tests', () => {
             // Fill form data
             document.getElementById('language').value = 'pt-BR';
             document.getElementById('country').value = 'br';
-            document.getElementById('state').value = 'rs';
+            document.getElementById('state').value = 'RS';
             document.getElementById('city').value = 'porto-alegre';
             document.getElementById('base-url').value = 'https://test.com/corpus';
 
@@ -530,7 +530,7 @@ describe('Workspace Workflow Integration Tests', () => {
             expect(mockDB.saveSettings).toHaveBeenCalledWith({
                 language: 'pt-BR',
                 country: 'br',
-                state: 'rs',
+                state: 'RS',
                 city: 'porto-alegre',
                 baseUrl: 'https://test.com/corpus'
             });

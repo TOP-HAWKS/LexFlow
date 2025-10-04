@@ -5,6 +5,8 @@
 
 // Import database functions
 import { setSetting, getSetting, saveHistory, listHistory, addSubmission, listSubmissions, updateSubmission } from '../db.js';
+// Import toast system
+import ToastSystem from './toast.js';
 
 class LexFlowApp {
     constructor() {
@@ -4397,7 +4399,7 @@ ${outputArea.value}
         // Apply validation states to form fields
         Object.keys(errors).forEach(fieldName => {
             const field = document.getElementById(`settings-${fieldName}`);
-            if (field) {
+            if (field && typeof field.closest === 'function') {
                 const formField = field.closest('.form-field');
                 if (formField) {
                     formField.classList.add('error');
@@ -4413,7 +4415,7 @@ ${outputArea.value}
         ['language', 'country', 'state', 'city', 'corpusUrl', 'githubToken'].forEach(fieldName => {
             if (!errors[fieldName]) {
                 const field = document.getElementById(`settings-${fieldName === 'corpusUrl' ? 'corpus-url' : fieldName === 'githubToken' ? 'github-token' : fieldName}`);
-                if (field && field.value) {
+                if (field && field.value && typeof field.closest === 'function') {
                     const formField = field.closest('.form-field');
                     if (formField) {
                         formField.classList.add('success');
@@ -4594,9 +4596,11 @@ ${outputArea.value}
 
                 // Clear validation on focus (when user starts typing)
                 field.addEventListener('focus', () => {
-                    const formField = field.closest('.form-field');
-                    if (formField) {
-                        formField.classList.remove('error', 'success');
+                    if (typeof field.closest === 'function') {
+                        const formField = field.closest('.form-field');
+                        if (formField) {
+                            formField.classList.remove('error', 'success');
+                        }
                     }
                 });
             }
@@ -4609,7 +4613,7 @@ ${outputArea.value}
      */
     validateSingleField(fieldId) {
         const field = document.getElementById(fieldId);
-        if (!field) return;
+        if (!field || typeof field.closest !== 'function') return;
 
         const formField = field.closest('.form-field');
         if (!formField) return;
@@ -5504,6 +5508,7 @@ ${markdown}
         
         // Validate required fields
         form.querySelectorAll('[required]').forEach(field => {
+            if (typeof field.closest !== 'function') return;
             const formField = field.closest('.form-field');
             const errorMessage = formField?.querySelector('.error-message');
             
@@ -5527,6 +5532,7 @@ ${markdown}
         
         // Validate URL fields
         form.querySelectorAll('input[type="url"]').forEach(field => {
+            if (typeof field.closest !== 'function') return;
             const formField = field.closest('.form-field');
             const errorMessage = formField?.querySelector('.error-message');
             
@@ -5583,9 +5589,11 @@ ${markdown}
             
             // Clear error state on input
             field.addEventListener('input', () => {
-                const formField = field.closest('.form-field');
-                if (formField?.classList.contains('error')) {
-                    formField.classList.remove('error');
+                if (typeof field.closest === 'function') {
+                    const formField = field.closest('.form-field');
+                    if (formField?.classList.contains('error')) {
+                        formField.classList.remove('error');
+                    }
                     field.setAttribute('aria-invalid', 'false');
                 }
             });
@@ -5597,6 +5605,8 @@ ${markdown}
      * @param {HTMLElement} field - Field to validate
      */
     validateSingleField(field) {
+        if (!field || typeof field.closest !== 'function') return true;
+        
         const formField = field.closest('.form-field');
         const errorMessage = formField?.querySelector('.error-message');
         let isValid = true;
