@@ -14,24 +14,745 @@ class LexFlowApp {
             'settings': () => this.showModal('settings')
         };
         
+        // Error handling state
+        this.isOnline = navigator.onLine;
+        this.errorRetryCount = new Map();
+        this.maxRetries = 3;
+        
+        // Initialize error handling
+        this.initErrorHandling();
+        
+        // Initialize performance monitoring
+        this.initPerformanceMonitoring();
+        
         // Initialize asynchronously
-        this.init().catch(console.error);
+        this.init().catch(error => this.handleGlobalError(error, 'Application initialization'));
+    }
+
+    /**
+     * Initialize performance monitoring
+     */
+    initPerformanceMonitoring() {
+        // Monitor memory usage periodically
+        if ('memory' in performance) {
+            this.performanceMonitorInterval = setInterval(() => {
+                this.checkMemoryUsage();
+            }, 30000); // Check every 30 seconds
+        }
+
+        // Clear expired cache on startup
+        this.clearExpiredCache();
+
+        // Monitor long tasks
+        if ('PerformanceObserver' in window) {
+            try {
+                const observer = new PerformanceObserver((list) => {
+                    for (const entry of list.getEntries()) {
+                        if (entry.duration > 50) { // Tasks longer than 50ms
+                            console.warn(`Long task detected: ${entry.duration.toFixed(2)}ms`);
+                        }
+                    }
+                });
+                observer.observe({ entryTypes: ['longtask'] });
+            } catch (error) {
+                console.warn('Performance observer not supported:', error);
+            }
+        }
+    }
+
+    /**
+     * Check memory usage and warn if high
+     */
+    checkMemoryUsage() {
+        if (!('memory' in performance)) return;
+
+        const memory = performance.memory;
+        const usedMB = (memory.usedJSHeapSize / 1024 / 1024).toFixed(2);
+        const limitMB = (memory.jsHeapSizeLimit / 1024 / 1024).toFixed(2);
+        const usagePercent = (memory.usedJSHeapSize / memory.jsHeapSizeLimit * 100).toFixed(1);
+
+        console.log(`Memory usage: ${usedMB}MB / ${limitMB}MB (${usagePercent}%)`);
+
+        // Warn if memory usage is high
+        if (usagePercent > 80) {
+            console.warn('High memory usage detected, performing cleanup');
+            this.performMemoryCleanup();
+            
+            this.showToast(
+                `Uso de memória alto (${usagePercent}%). Limpeza automática realizada.`,
+                'warning',
+                5000
+            );
+        }
+    }
+
+    /**
+     * Perform memory cleanup
+     */
+    performMemoryCleanup() {
+        // Clear large data structures
+        if (this.allArticles && this.allArticles.length > 0) {
+            console.log(`Clearing ${this.allArticles.length} cached articles`);
+            this.allArticles = [];
+        }
+
+        // Clear cached DOM references
+        this.cachedElements = {};
+
+        // Clear old toast notifications
+        if (this.toastSystem && this.toastSystem.getCount() > 3) {
+            this.toastSystem.clear();
+        }
+
+        // Clear expired cache entries
+        this.clearExpiredCache();
+
+        // Force garbage collection if available (Chrome DevTools)
+        if (window.gc && typeof window.gc === 'function') {
+            window.gc();
+        }
+    }
+
+    /**
+     * Initialize comprehensive error handling system
+     */
+    initErrorHandling() {
+        // Global error handlers
+        window.addEventListener('error', (event) => {
+            this.handleGlobalError(event.error, 'JavaScript error', {
+                filename: event.filename,
+                lineno: event.lineno,
+                colno: event.colno
+            });
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            this.handleGlobalError(event.reason, 'Unhandled promise rejection');
+            event.preventDefault(); // Prevent console error
+        });
+
+        // Network status monitoring
+        window.addEventListener('online', () => {
+            this.isOnline = true;
+            this.showToast('Conexão restaurada', 'success', 3000);
+            this.retryFailedOperations();
+        });
+
+        window.addEventListener('offline', () => {
+            this.isOnline = false;
+            this.showToast('Sem conexão com a internet. Modo offline ativado.', 'warning', 5000);
+        });
+
+        // Storage quota monitoring
+        if ('storage' in navigator && 'estimate' in navigator.storage) {
+            this.monitorStorageQuota();
+        }
+    }
+
+    /**
+     * Handle global application errors
+     * @param {Error} error - The error object
+     * @param {string} context - Context where error occurred
+     * @param {Object} metadata - Additional error metadata
+     */
+    handleGlobalError(error, context = 'Unknown', metadata = {}) {
+        console.error(`Global error in ${context}:`, error, metadata);
+        
+        // Determine error type and severity
+        const errorInfo = this.categorizeError(error, context);
+        
+        // Log error for debugging
+        this.logError(error, context, metadata, errorInfo);
+        
+        // Show user-friendly message
+        this.showErrorToUser(errorInfo);
+        
+        // Attempt recovery if possible
+        this.attemptErrorRecovery(errorInfo, context);
+    }
+
+    /**
+     * Categorize error type and determine appropriate response
+     * @param {Error} error - The error object
+     * @param {string} context - Context where error occurred
+     * @returns {Object} - Error information object
+     */
+    categorizeError(error, context) {
+        const errorMessage = error?.message || error?.toString() || 'Unknown error';
+        
+        // Network errors
+        if (errorMessage.includes('fetch') || errorMessage.includes('network') || 
+            errorMessage.includes('Failed to fetch') || !this.isOnline) {
+            return {
+                type: 'network',
+                severity: 'medium',
+                userMessage: 'Erro de conexão',
+                suggestion: 'Verifique sua conexão com a internet e tente novamente',
+                recoverable: true,
+                retryable: true
+            };
+        }
+        
+        // AI/Chrome AI errors
+        if (errorMessage.includes('ai') || errorMessage.includes('assistant') || 
+            errorMessage.includes('summarizer') || context.includes('AI')) {
+            return {
+                type: 'ai',
+                severity: 'medium',
+                userMessage: 'Erro na funcionalidade de IA',
+                suggestion: 'Verifique se o Chrome AI está habilitado nas configurações',
+                recoverable: true,
+                retryable: false,
+                helpAction: () => this.showAISetupHelp()
+            };
+        }
+        
+        // Storage errors
+        if (errorMessage.includes('storage') || errorMessage.includes('quota') || 
+            errorMessage.includes('IndexedDB') || errorMessage.includes('localStorage')) {
+            return {
+                type: 'storage',
+                severity: 'high',
+                userMessage: 'Erro de armazenamento',
+                suggestion: 'Espaço de armazenamento pode estar cheio. Limpe dados antigos.',
+                recoverable: true,
+                retryable: true,
+                helpAction: () => this.showStorageHelp()
+            };
+        }
+        
+        // Parsing/Markdown errors
+        if (errorMessage.includes('parse') || errorMessage.includes('markdown') || 
+            errorMessage.includes('JSON') || context.includes('markdown')) {
+            return {
+                type: 'parsing',
+                severity: 'medium',
+                userMessage: 'Erro ao processar documento',
+                suggestion: 'O formato do documento pode estar incorreto',
+                recoverable: false,
+                retryable: false
+            };
+        }
+        
+        // Permission errors
+        if (errorMessage.includes('permission') || errorMessage.includes('denied') || 
+            errorMessage.includes('unauthorized')) {
+            return {
+                type: 'permission',
+                severity: 'high',
+                userMessage: 'Erro de permissão',
+                suggestion: 'Verifique as permissões da extensão',
+                recoverable: false,
+                retryable: false
+            };
+        }
+        
+        // Generic/Unknown errors
+        return {
+            type: 'unknown',
+            severity: 'medium',
+            userMessage: 'Erro inesperado',
+            suggestion: 'Tente recarregar a extensão',
+            recoverable: true,
+            retryable: true
+        };
+    }
+
+    /**
+     * Log error with detailed information
+     * @param {Error} error - The error object
+     * @param {string} context - Context where error occurred
+     * @param {Object} metadata - Additional metadata
+     * @param {Object} errorInfo - Categorized error information
+     */
+    logError(error, context, metadata, errorInfo) {
+        const errorLog = {
+            timestamp: new Date().toISOString(),
+            context: context,
+            type: errorInfo.type,
+            severity: errorInfo.severity,
+            message: error?.message || 'Unknown error',
+            stack: error?.stack,
+            metadata: metadata,
+            userAgent: navigator.userAgent,
+            url: window.location.href,
+            isOnline: this.isOnline,
+            currentView: this.currentView
+        };
+        
+        // Store error log locally for debugging
+        try {
+            const errorLogs = JSON.parse(localStorage.getItem('lexflow-error-logs') || '[]');
+            errorLogs.push(errorLog);
+            
+            // Keep only last 50 errors
+            if (errorLogs.length > 50) {
+                errorLogs.splice(0, errorLogs.length - 50);
+            }
+            
+            localStorage.setItem('lexflow-error-logs', JSON.stringify(errorLogs));
+        } catch (storageError) {
+            console.warn('Could not store error log:', storageError);
+        }
+        
+        console.error('Detailed error log:', errorLog);
+    }
+
+    /**
+     * Show user-friendly error message
+     * @param {Object} errorInfo - Categorized error information
+     */
+    showErrorToUser(errorInfo) {
+        const message = `${errorInfo.userMessage}. ${errorInfo.suggestion}`;
+        const duration = errorInfo.severity === 'high' ? 8000 : 5000;
+        
+        // Create enhanced toast with help action if available
+        if (errorInfo.helpAction) {
+            this.showToastWithAction(
+                message,
+                'error',
+                duration,
+                'Ajuda',
+                errorInfo.helpAction
+            );
+        } else {
+            this.showToast(message, 'error', duration);
+        }
+    }
+
+    /**
+     * Attempt error recovery based on error type
+     * @param {Object} errorInfo - Categorized error information
+     * @param {string} context - Context where error occurred
+     */
+    attemptErrorRecovery(errorInfo, context) {
+        if (!errorInfo.recoverable) return;
+        
+        const retryKey = `${errorInfo.type}-${context}`;
+        const currentRetries = this.errorRetryCount.get(retryKey) || 0;
+        
+        if (errorInfo.retryable && currentRetries < this.maxRetries) {
+            // Increment retry count
+            this.errorRetryCount.set(retryKey, currentRetries + 1);
+            
+            // Attempt recovery based on error type
+            setTimeout(() => {
+                this.performErrorRecovery(errorInfo.type, context);
+            }, Math.pow(2, currentRetries) * 1000); // Exponential backoff
+        }
+    }
+
+    /**
+     * Perform specific recovery actions based on error type
+     * @param {string} errorType - Type of error
+     * @param {string} context - Context where error occurred
+     */
+    performErrorRecovery(errorType, context) {
+        switch (errorType) {
+            case 'network':
+                if (this.isOnline) {
+                    this.retryFailedOperations();
+                }
+                break;
+                
+            case 'storage':
+                this.fallbackToSessionStorage();
+                break;
+                
+            case 'ai':
+                this.fallbackToManualMode();
+                break;
+                
+            default:
+                console.log(`No specific recovery for error type: ${errorType}`);
+        }
+    }
+
+    /**
+     * Enhanced network error handling
+     * @param {Error} error - Network error
+     * @param {string} context - Context of the network operation
+     * @param {string} url - URL that failed
+     * @returns {Object} - Error response with fallback options
+     */
+    async handleNetworkError(error, context = 'Network operation', url = '') {
+        console.error(`Network error in ${context}:`, error);
+        
+        const errorInfo = {
+            type: 'network',
+            context: context,
+            url: url,
+            isOnline: this.isOnline,
+            timestamp: Date.now()
+        };
+        
+        // Determine specific network error type
+        if (error.message.includes('404')) {
+            this.showToast('Recurso não encontrado. Verifique a URL.', 'error', 5000);
+            return { success: false, error: 'not_found', fallback: 'manual_entry' };
+        }
+        
+        if (error.message.includes('403') || error.message.includes('401')) {
+            this.showToast('Acesso negado. Verifique as permissões.', 'error', 5000);
+            return { success: false, error: 'permission_denied', fallback: 'alternative_source' };
+        }
+        
+        if (!this.isOnline) {
+            this.showToast('Sem conexão. Usando modo offline.', 'warning', 5000);
+            return { success: false, error: 'offline', fallback: 'cached_data' };
+        }
+        
+        // Generic network error
+        this.showToastWithAction(
+            'Erro de rede. Verifique sua conexão.',
+            'error',
+            5000,
+            'Tentar Novamente',
+            () => this.retryNetworkOperation(context, url)
+        );
+        
+        return { success: false, error: 'network_error', fallback: 'retry' };
+    }
+
+    /**
+     * Enhanced AI error handling
+     * @param {Error} error - AI operation error
+     * @param {string} context - Context of the AI operation
+     * @returns {Object} - Error response with fallback options
+     */
+    handleAIError(error, context = 'AI operation') {
+        console.error(`AI error in ${context}:`, error);
+        
+        let userMessage = 'Erro na operação de IA';
+        let suggestion = '';
+        let fallback = 'manual_mode';
+        
+        if (error.message.includes('not available') || error.message.includes('undefined')) {
+            userMessage = 'Chrome AI não está disponível';
+            suggestion = 'Verifique as configurações do Chrome AI';
+            fallback = 'setup_required';
+        } else if (error.message.includes('quota') || error.message.includes('limit')) {
+            userMessage = 'Limite de uso da IA atingido';
+            suggestion = 'Tente novamente em alguns minutos';
+            fallback = 'rate_limited';
+        } else if (error.message.includes('model')) {
+            userMessage = 'Modelo de IA não disponível';
+            suggestion = 'O modelo pode ainda estar sendo baixado';
+            fallback = 'model_loading';
+        }
+        
+        this.showToastWithAction(
+            `${userMessage}. ${suggestion}`,
+            'error',
+            8000,
+            'Configurar IA',
+            () => this.showAISetupHelp()
+        );
+        
+        return { success: false, error: 'ai_error', fallback: fallback };
+    }
+
+    /**
+     * Enhanced storage error handling
+     * @param {Error} error - Storage operation error
+     * @param {string} context - Context of the storage operation
+     * @returns {Object} - Error response with fallback options
+     */
+    async handleStorageError(error, context = 'Storage operation') {
+        console.error(`Storage error in ${context}:`, error);
+        
+        let userMessage = 'Erro de armazenamento';
+        let suggestion = '';
+        let fallback = 'session_storage';
+        
+        if (error.message.includes('quota') || error.message.includes('exceeded')) {
+            userMessage = 'Espaço de armazenamento esgotado';
+            suggestion = 'Limpe dados antigos ou aumente o espaço disponível';
+            fallback = 'cleanup_required';
+            
+            // Attempt automatic cleanup
+            await this.performStorageCleanup();
+        } else if (error.message.includes('blocked') || error.message.includes('denied')) {
+            userMessage = 'Acesso ao armazenamento bloqueado';
+            suggestion = 'Verifique as configurações de privacidade do navegador';
+            fallback = 'permission_required';
+        }
+        
+        this.showToastWithAction(
+            `${userMessage}. ${suggestion}`,
+            'error',
+            8000,
+            'Gerenciar Armazenamento',
+            () => this.showStorageHelp()
+        );
+        
+        // Fallback to session storage
+        this.fallbackToSessionStorage();
+        
+        return { success: false, error: 'storage_error', fallback: fallback };
+    }
+
+    /**
+     * Retry failed network operations
+     */
+    async retryFailedOperations() {
+        if (!this.isOnline) return;
+        
+        // Clear retry counts for network operations
+        for (const [key, count] of this.errorRetryCount.entries()) {
+            if (key.includes('network')) {
+                this.errorRetryCount.delete(key);
+            }
+        }
+        
+        // Retry loading documents if in workspace
+        if (this.currentView === 'workspace' && this.currentStep === 2) {
+            try {
+                await this.loadAvailableDocuments();
+            } catch (error) {
+                console.warn('Retry failed for document loading:', error);
+            }
+        }
+    }
+
+    /**
+     * Fallback to session storage when IndexedDB fails
+     */
+    fallbackToSessionStorage() {
+        console.warn('Falling back to session storage');
+        
+        // Override storage methods to use sessionStorage
+        this.useSessionStorageFallback = true;
+        
+        this.showToast('Usando armazenamento temporário devido a limitações', 'warning', 5000);
+    }
+
+    /**
+     * Fallback to manual mode when AI fails
+     */
+    fallbackToManualMode() {
+        console.warn('Falling back to manual mode');
+        
+        this.chromeAIAvailable = false;
+        this.updateIntegrationStatus();
+        
+        this.showToast('Modo manual ativado. IA indisponível.', 'warning', 5000);
+    }
+
+    /**
+     * Monitor storage quota and warn user
+     */
+    async monitorStorageQuota() {
+        try {
+            const estimate = await navigator.storage.estimate();
+            const usedMB = (estimate.usage / 1024 / 1024).toFixed(2);
+            const quotaMB = (estimate.quota / 1024 / 1024).toFixed(2);
+            const usagePercent = (estimate.usage / estimate.quota * 100).toFixed(1);
+            
+            console.log(`Storage usage: ${usedMB}MB / ${quotaMB}MB (${usagePercent}%)`);
+            
+            // Warn if usage is high
+            if (usagePercent > 80) {
+                this.showToastWithAction(
+                    `Armazenamento quase cheio (${usagePercent}% usado)`,
+                    'warning',
+                    8000,
+                    'Limpar Dados',
+                    () => this.showStorageHelp()
+                );
+            }
+        } catch (error) {
+            console.warn('Could not check storage quota:', error);
+        }
+    }
+
+    /**
+     * Perform automatic storage cleanup
+     */
+    async performStorageCleanup() {
+        try {
+            // Clean old error logs
+            const errorLogs = JSON.parse(localStorage.getItem('lexflow-error-logs') || '[]');
+            if (errorLogs.length > 10) {
+                const recentLogs = errorLogs.slice(-10);
+                localStorage.setItem('lexflow-error-logs', JSON.stringify(recentLogs));
+            }
+            
+            // Clean old cached data (if any)
+            const cacheKeys = Object.keys(localStorage).filter(key => 
+                key.startsWith('lexflow-cache-') && 
+                Date.now() - parseInt(key.split('-').pop()) > 24 * 60 * 60 * 1000 // 24 hours
+            );
+            
+            cacheKeys.forEach(key => localStorage.removeItem(key));
+            
+            if (cacheKeys.length > 0) {
+                this.showToast(`${cacheKeys.length} itens antigos removidos`, 'success', 3000);
+            }
+        } catch (error) {
+            console.warn('Storage cleanup failed:', error);
+        }
+    }
+
+    /**
+     * Show storage management help
+     */
+    showStorageHelp() {
+        const helpContent = `
+            <h3>Gerenciamento de Armazenamento</h3>
+            <p>O LexFlow usa armazenamento local para salvar suas configurações e dados.</p>
+            
+            <h4>Ações Disponíveis:</h4>
+            <div class="storage-actions">
+                <button onclick="app.clearErrorLogs()" class="secondary">
+                    Limpar Logs de Erro
+                </button>
+                <button onclick="app.clearCachedData()" class="secondary">
+                    Limpar Cache
+                </button>
+                <button onclick="app.exportSettings()" class="secondary">
+                    Exportar Configurações
+                </button>
+            </div>
+            
+            <h4>Uso Atual:</h4>
+            <div id="storage-usage">Calculando...</div>
+            
+            <div class="text-center mt-2">
+                <button onclick="app.hideModal('storage-help')" class="primary">
+                    Fechar
+                </button>
+            </div>
+        `;
+
+        // Create modal if it doesn't exist
+        if (!document.getElementById('storage-help-modal')) {
+            const modalHtml = `
+                <div id="storage-help-modal" class="modal-overlay">
+                    <div class="modal">
+                        <div class="modal-header">
+                            <h3>Gerenciamento de Armazenamento</h3>
+                            <button class="modal-close" onclick="app.hideModal('storage-help')">&times;</button>
+                        </div>
+                        <div id="storage-help-content"></div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        // Update content and show modal
+        document.getElementById('storage-help-content').innerHTML = helpContent;
+        this.showModal('storage-help');
+        
+        // Update storage usage info
+        this.updateStorageUsageDisplay();
+    }
+
+    /**
+     * Update storage usage display in help modal
+     */
+    async updateStorageUsageDisplay() {
+        const usageDiv = document.getElementById('storage-usage');
+        if (!usageDiv) return;
+        
+        try {
+            if ('storage' in navigator && 'estimate' in navigator.storage) {
+                const estimate = await navigator.storage.estimate();
+                const usedMB = (estimate.usage / 1024 / 1024).toFixed(2);
+                const quotaMB = (estimate.quota / 1024 / 1024).toFixed(2);
+                const usagePercent = (estimate.usage / estimate.quota * 100).toFixed(1);
+                
+                usageDiv.innerHTML = `
+                    <div class="usage-bar">
+                        <div class="usage-fill" style="width: ${usagePercent}%"></div>
+                    </div>
+                    <p>${usedMB}MB usado de ${quotaMB}MB disponível (${usagePercent}%)</p>
+                `;
+            } else {
+                usageDiv.innerHTML = '<p>Informações de uso não disponíveis neste navegador</p>';
+            }
+        } catch (error) {
+            usageDiv.innerHTML = '<p>Erro ao calcular uso de armazenamento</p>';
+        }
+    }
+
+    /**
+     * Clear error logs
+     */
+    clearErrorLogs() {
+        try {
+            localStorage.removeItem('lexflow-error-logs');
+            this.showToast('Logs de erro limpos', 'success', 3000);
+        } catch (error) {
+            this.showToast('Erro ao limpar logs', 'error', 3000);
+        }
+    }
+
+    /**
+     * Clear cached data
+     */
+    clearCachedData() {
+        try {
+            const cacheKeys = Object.keys(localStorage).filter(key => 
+                key.startsWith('lexflow-cache-')
+            );
+            
+            cacheKeys.forEach(key => localStorage.removeItem(key));
+            
+            this.showToast(`${cacheKeys.length} itens de cache removidos`, 'success', 3000);
+        } catch (error) {
+            this.showToast('Erro ao limpar cache', 'error', 3000);
+        }
+    }
+
+    /**
+     * Retry specific network operation
+     * @param {string} context - Context of the operation
+     * @param {string} url - URL to retry
+     */
+    async retryNetworkOperation(context, url) {
+        if (!this.isOnline) {
+            this.showToast('Ainda sem conexão', 'warning', 3000);
+            return;
+        }
+        
+        this.showToast('Tentando novamente...', 'info', 2000);
+        
+        // Reset retry count for this operation
+        const retryKey = `network-${context}`;
+        this.errorRetryCount.delete(retryKey);
+        
+        // Retry based on context
+        try {
+            if (context.includes('document')) {
+                await this.loadAvailableDocuments();
+            } else if (context.includes('article')) {
+                await this.loadDocumentArticles();
+            }
+        } catch (error) {
+            this.handleNetworkError(error, context, url);
+        }
     }
 
     /**
      * Initialize the application
      */
     async init() {
-        this.initRouter();
-        this.initEventListeners();
-        this.initToastSystem();
-        
-        // Load settings on startup
-        await this.loadSettings();
-        
-        this.loadInitialView();
-        
-        console.log('LexFlow SPA initialized');
+        try {
+            this.initRouter();
+            this.initEventListeners();
+            this.initToastSystem();
+            
+            // Load settings on startup
+            await this.loadSettings();
+            
+            this.loadInitialView();
+            
+            console.log('LexFlow SPA initialized');
+        } catch (error) {
+            this.handleGlobalError(error, 'Application initialization');
+        }
     }
 
     /**
@@ -78,28 +799,94 @@ class LexFlowApp {
      * @param {string} viewName - The view to show
      */
     showView(viewName) {
-        // Add loading state
+        // Performance optimization: avoid unnecessary view switches
+        if (this.currentView === viewName) return;
+        
+        // Add loading state with performance timing
+        const startTime = performance.now();
         document.body.classList.add('loading');
         
-        // Hide all views
-        document.querySelectorAll('.view').forEach(view => {
+        // Cleanup previous view to free memory
+        this.cleanupCurrentView();
+        
+        // Hide all views with optimized selector
+        const views = document.querySelectorAll('.view.active');
+        views.forEach(view => {
             view.classList.remove('active');
         });
 
-        // Show target view with animation
-        setTimeout(() => {
+        // Use requestAnimationFrame for smooth transitions
+        requestAnimationFrame(() => {
             const targetView = document.getElementById(`${viewName}-view`);
             if (targetView) {
                 targetView.classList.add('active');
                 this.currentView = viewName;
                 
-                // Initialize view-specific functionality
-                this.initViewFunctionality(viewName);
+                // Initialize view-specific functionality asynchronously
+                this.initViewFunctionality(viewName).then(() => {
+                    // Remove loading state
+                    document.body.classList.remove('loading');
+                    
+                    // Performance logging
+                    const loadTime = performance.now() - startTime;
+                    console.log(`View ${viewName} loaded in ${loadTime.toFixed(2)}ms`);
+                    
+                    // Show performance warning if slow
+                    if (loadTime > 500) {
+                        console.warn(`Slow view load detected: ${viewName} took ${loadTime.toFixed(2)}ms`);
+                    }
+                }).catch(error => {
+                    document.body.classList.remove('loading');
+                    this.handleGlobalError(error, `View initialization: ${viewName}`);
+                });
+            } else {
+                document.body.classList.remove('loading');
+                this.handleGlobalError(new Error(`View not found: ${viewName}`), 'View switching');
             }
-            
-            // Remove loading state
-            document.body.classList.remove('loading');
-        }, 100);
+        });
+    }
+
+    /**
+     * Cleanup current view to free memory and remove event listeners
+     */
+    cleanupCurrentView() {
+        // Clear any running timeouts
+        if (this.searchTimeout) clearTimeout(this.searchTimeout);
+        if (this.autoSaveTimeout) clearTimeout(this.autoSaveTimeout);
+        if (this.corpusValidationTimeout) clearTimeout(this.corpusValidationTimeout);
+        
+        // Clear any intervals
+        if (this.performanceMonitorInterval) {
+            clearInterval(this.performanceMonitorInterval);
+            this.performanceMonitorInterval = null;
+        }
+        
+        // Remove dynamic event listeners to prevent memory leaks
+        this.removeDynamicEventListeners();
+        
+        // Clear large data structures
+        if (this.allArticles && this.allArticles.length > 100) {
+            this.allArticles = [];
+        }
+        
+        // Clear cached DOM references
+        this.cachedElements = {};
+    }
+
+    /**
+     * Remove dynamic event listeners to prevent memory leaks
+     */
+    removeDynamicEventListeners() {
+        // Remove article checkbox listeners
+        document.querySelectorAll('.article-checkbox').forEach(checkbox => {
+            checkbox.replaceWith(checkbox.cloneNode(true));
+        });
+        
+        // Remove dynamic button listeners
+        document.querySelectorAll('[onclick*="app."]').forEach(element => {
+            const newElement = element.cloneNode(true);
+            element.parentNode.replaceChild(newElement, element);
+        });
     }
 
     /**
@@ -116,20 +903,33 @@ class LexFlowApp {
     }
 
     /**
-     * Initialize view-specific functionality
+     * Initialize view-specific functionality with performance optimization
      * @param {string} viewName - The view being initialized
+     * @returns {Promise} - Promise that resolves when initialization is complete
      */
-    initViewFunctionality(viewName) {
-        switch (viewName) {
-            case 'home':
-                this.initHomeView();
-                break;
-            case 'workspace':
-                this.initWorkspaceView();
-                break;
-            case 'collector':
-                this.initCollectorView();
-                break;
+    async initViewFunctionality(viewName) {
+        // Performance monitoring
+        const initStart = performance.now();
+        
+        try {
+            // Use lazy loading for heavy views
+            switch (viewName) {
+                case 'home':
+                    await this.initHomeView();
+                    break;
+                case 'workspace':
+                    await this.initWorkspaceView();
+                    break;
+                case 'collector':
+                    await this.initCollectorView();
+                    break;
+            }
+            
+            const initTime = performance.now() - initStart;
+            console.log(`${viewName} view initialized in ${initTime.toFixed(2)}ms`);
+            
+        } catch (error) {
+            throw new Error(`Failed to initialize ${viewName} view: ${error.message}`);
         }
     }
 
@@ -169,23 +969,41 @@ class LexFlowApp {
     }
 
     /**
-     * Initialize workspace view functionality
+     * Initialize workspace view functionality with loading states
      */
-    initWorkspaceView() {
-        // Step navigation
-        this.initWorkspaceSteps();
+    async initWorkspaceView() {
+        const loadingToastId = this.showLoadingToast('Inicializando workspace...');
         
-        // Step 1: Jurisdiction configuration
-        this.initJurisdictionStep();
-        
-        // Step 2: Document search
-        this.initDocumentSearchStep();
-        
-        // Step 3: Prompt studio
-        this.initPromptStudioStep();
-        
-        // Test integrations
-        this.testIntegrations();
+        try {
+            // Step navigation
+            await this.initWorkspaceSteps();
+            
+            // Update loading message
+            this.hideToast(loadingToastId);
+            const configLoadingId = this.showLoadingToast('Carregando configurações...');
+            
+            // Step 1: Jurisdiction configuration
+            await this.initJurisdictionStep();
+            
+            // Step 2: Document search (lazy load)
+            this.initDocumentSearchStep();
+            
+            // Step 3: Prompt studio (lazy load)
+            this.initPromptStudioStep();
+            
+            this.hideToast(configLoadingId);
+            const integrationLoadingId = this.showLoadingToast('Testando integrações...');
+            
+            // Test integrations
+            await this.testIntegrations();
+            
+            this.hideToast(integrationLoadingId);
+            this.showToast('Workspace pronto!', 'success', 2000);
+            
+        } catch (error) {
+            this.hideToast(loadingToastId);
+            throw error;
+        }
     }
 
     /**
@@ -1021,11 +1839,13 @@ class LexFlowApp {
     }
 
     /**
-     * Load available documents from corpus
+     * Load available documents from corpus with caching and performance optimization
      */
     async loadAvailableDocuments() {
         const documentSelect = document.getElementById('document-select');
         if (!documentSelect) return;
+
+        const loadingToastId = this.showLoadingToast('Carregando documentos...');
 
         try {
             // Get corpus URL from jurisdiction settings
@@ -1033,6 +1853,7 @@ class LexFlowApp {
             const corpusUrl = settings.corpusUrl;
             
             if (!corpusUrl) {
+                this.hideToast(loadingToastId);
                 this.showToast('Configure a URL do corpus na Etapa 1', 'error');
                 return;
             }
@@ -1041,40 +1862,76 @@ class LexFlowApp {
             documentSelect.innerHTML = '<option value="">Carregando documentos...</option>';
             documentSelect.disabled = true;
 
-            // Fetch document list (assuming a documents.json or similar index file)
-            const documentsUrl = corpusUrl.endsWith('/') ? corpusUrl + 'documents.json' : corpusUrl + '/documents.json';
+            // Check cache first for performance
+            const cacheKey = `documents-${btoa(corpusUrl)}`;
+            const cachedData = this.getCachedData(cacheKey, 5 * 60 * 1000); // 5 minutes cache
             
             let documents = [];
-            try {
-                const response = await fetch(documentsUrl);
-                if (response.ok) {
-                    documents = await response.json();
-                } else {
-                    // Fallback: try to load common document names
+            
+            if (cachedData) {
+                documents = cachedData;
+                console.log('Using cached documents');
+            } else {
+                // Fetch document list with timeout
+                const documentsUrl = corpusUrl.endsWith('/') ? corpusUrl + 'documents.json' : corpusUrl + '/documents.json';
+                
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                    
+                    const response = await fetch(documentsUrl, { 
+                        signal: controller.signal,
+                        cache: 'default'
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok) {
+                        documents = await response.json();
+                        // Cache the results
+                        this.setCachedData(cacheKey, documents);
+                    } else {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        throw new Error('Request timeout - corpus server may be slow');
+                    }
+                    console.warn('Could not load documents.json, using defaults:', error);
                     documents = await this.getDefaultDocuments(settings.country);
                 }
-            } catch (error) {
-                console.warn('Could not load documents.json, using defaults:', error);
-                documents = await this.getDefaultDocuments(settings.country);
             }
 
-            // Populate dropdown
-            documentSelect.innerHTML = '<option value="">Selecione um documento...</option>';
+            // Optimize DOM manipulation
+            const fragment = document.createDocumentFragment();
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Selecione um documento...';
+            fragment.appendChild(defaultOption);
+
+            // Batch DOM updates for better performance
             documents.forEach(doc => {
                 const option = document.createElement('option');
                 option.value = doc.filename || doc.name;
                 option.textContent = doc.title || doc.name;
                 option.dataset.url = doc.url || `${corpusUrl}/${doc.filename || doc.name}`;
-                documentSelect.appendChild(option);
+                fragment.appendChild(option);
             });
 
+            // Single DOM update
+            documentSelect.innerHTML = '';
+            documentSelect.appendChild(fragment);
             documentSelect.disabled = false;
-            this.showToast(`${documents.length} documentos carregados`, 'success');
+
+            this.hideToast(loadingToastId);
+            this.showToast(`${documents.length} documentos carregados`, 'success', 2000);
 
         } catch (error) {
-            console.error('Error loading documents:', error);
+            this.hideToast(loadingToastId);
+            this.handleNetworkError(error, 'Loading documents', settings?.corpusUrl);
+            
             documentSelect.innerHTML = '<option value="">Erro ao carregar documentos</option>';
-            this.showToast('Erro ao carregar lista de documentos', 'error');
+            documentSelect.disabled = false;
         }
     }
 
@@ -1105,7 +1962,7 @@ class LexFlowApp {
     }
 
     /**
-     * Load articles from selected document
+     * Load articles from selected document with caching and performance optimization
      */
     async loadDocumentArticles() {
         const documentSelect = document.getElementById('document-select');
@@ -1119,33 +1976,113 @@ class LexFlowApp {
             return;
         }
 
-        try {
-            // Show loading state
-            articlesContainer.innerHTML = '<p class="muted">Carregando artigos...</p>';
+        const loadingToastId = this.showLoadingToast('Carregando artigos...');
 
+        try {
             // Get document URL
             const documentUrl = selectedOption.dataset.url;
             
-            // Import markdown utility
-            const { fetchMarkdown, splitByArticles } = await import('../util/markdown.js');
+            // Check cache first
+            const cacheKey = `articles-${btoa(documentUrl)}`;
+            const cachedArticles = this.getCachedData(cacheKey, 10 * 60 * 1000); // 10 minutes cache
             
-            // Fetch and parse document
-            const markdownText = await fetchMarkdown(documentUrl);
-            const articles = splitByArticles(markdownText);
+            let articles;
             
-            this.allArticles = articles;
-            this.renderArticles(articles);
-            
-            this.showToast(`${articles.length} artigos carregados`, 'success');
+            if (cachedArticles) {
+                articles = cachedArticles;
+                console.log('Using cached articles');
+                this.hideToast(loadingToastId);
+                const cacheToastId = this.showLoadingToast('Renderizando artigos...');
+                
+                // Defer rendering to next frame for better UX
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                
+                this.allArticles = articles;
+                this.renderArticles(articles);
+                
+                this.hideToast(cacheToastId);
+                this.showToast(`${articles.length} artigos carregados (cache)`, 'success', 2000);
+            } else {
+                // Show loading state
+                articlesContainer.innerHTML = '<p class="muted">Carregando artigos...</p>';
+                
+                // Dynamic import for better performance
+                const { fetchMarkdown, splitByArticles } = await import('../util/markdown.js');
+                
+                // Update loading message
+                this.hideToast(loadingToastId);
+                const fetchToastId = this.showLoadingToast('Baixando documento...');
+                
+                // Fetch with timeout and progress
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                
+                const markdownText = await fetchMarkdown(documentUrl, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                
+                this.hideToast(fetchToastId);
+                const parseToastId = this.showLoadingToast('Processando artigos...');
+                
+                // Parse articles with progress feedback
+                articles = await this.parseArticlesWithProgress(markdownText, splitByArticles);
+                
+                // Cache the results
+                this.setCachedData(cacheKey, articles);
+                
+                this.allArticles = articles;
+                
+                this.hideToast(parseToastId);
+                const renderToastId = this.showLoadingToast('Renderizando interface...');
+                
+                // Defer rendering to prevent blocking
+                await new Promise(resolve => setTimeout(resolve, 0));
+                
+                this.renderArticles(articles);
+                
+                this.hideToast(renderToastId);
+                this.showToast(`${articles.length} artigos carregados`, 'success', 2000);
+            }
 
         } catch (error) {
-            this.handleMarkdownError(error, 'Loading document articles');
+            this.hideToast(loadingToastId);
+            
+            if (error.name === 'AbortError') {
+                this.handleNetworkError(new Error('Timeout ao carregar documento'), 'Loading document articles', selectedOption.dataset.url);
+            } else {
+                this.handleMarkdownError(error, 'Loading document articles');
+            }
+            
             articlesContainer.innerHTML = '<p class="error">Erro ao carregar artigos do documento</p>';
         }
     }
 
     /**
-     * Render articles list with checkboxes
+     * Parse articles with progress feedback for large documents
+     * @param {string} markdownText - Markdown content
+     * @param {Function} splitByArticles - Article splitting function
+     * @returns {Promise<Array>} - Array of articles
+     */
+    async parseArticlesWithProgress(markdownText, splitByArticles) {
+        // For very large documents, show progress
+        if (markdownText.length > 100000) { // 100KB+
+            return new Promise((resolve, reject) => {
+                // Use setTimeout to prevent blocking the UI
+                setTimeout(() => {
+                    try {
+                        const articles = splitByArticles(markdownText);
+                        resolve(articles);
+                    } catch (error) {
+                        reject(error);
+                    }
+                }, 0);
+            });
+        } else {
+            return splitByArticles(markdownText);
+        }
+    }
+
+    /**
+     * Render articles list with performance optimization and virtual scrolling
      * @param {Array} articles - Array of article objects
      */
     renderArticles(articles) {
@@ -1157,27 +2094,141 @@ class LexFlowApp {
             return;
         }
 
-        const articlesHtml = articles.map((article, index) => {
+        // Performance optimization: use virtual scrolling for large lists
+        const useVirtualScrolling = articles.length > 50;
+        
+        if (useVirtualScrolling) {
+            this.renderArticlesVirtual(articles, articlesContainer);
+        } else {
+            this.renderArticlesStandard(articles, articlesContainer);
+        }
+
+        // Add CSS for articles if not already added
+        this.addArticlesCSS();
+    }
+
+    /**
+     * Render articles with virtual scrolling for large lists
+     * @param {Array} articles - Array of article objects
+     * @param {HTMLElement} container - Container element
+     */
+    renderArticlesVirtual(articles, container) {
+        const itemHeight = 120; // Estimated height per article
+        const visibleItems = Math.ceil(container.clientHeight / itemHeight) + 5; // Buffer
+        
+        let scrollTop = 0;
+        let startIndex = 0;
+        let endIndex = Math.min(visibleItems, articles.length);
+
+        const renderVisibleItems = () => {
+            const fragment = document.createDocumentFragment();
+            
+            for (let i = startIndex; i < endIndex; i++) {
+                const article = articles[i];
+                const isSelected = this.selectedArticles.has(i);
+                const preview = article.text.length > 200 ? 
+                    article.text.substring(0, 200) + '...' : 
+                    article.text;
+
+                const articleDiv = document.createElement('div');
+                articleDiv.className = 'article-item';
+                articleDiv.dataset.index = i;
+                articleDiv.style.position = 'absolute';
+                articleDiv.style.top = `${i * itemHeight}px`;
+                articleDiv.style.width = '100%';
+                articleDiv.innerHTML = `
+                    <label class="article-label">
+                        <input type="checkbox" class="article-checkbox" 
+                               data-index="${i}" ${isSelected ? 'checked' : ''}>
+                        <strong>${this.escapeHtml(article.title)}</strong>
+                    </label>
+                    <div class="article-preview">
+                        ${this.escapeHtml(preview)}
+                    </div>
+                `;
+                fragment.appendChild(articleDiv);
+            }
+            
+            return fragment;
+        };
+
+        const scrollHandler = () => {
+            const newScrollTop = container.scrollTop;
+            const newStartIndex = Math.floor(newScrollTop / itemHeight);
+            const newEndIndex = Math.min(newStartIndex + visibleItems, articles.length);
+
+            if (newStartIndex !== startIndex || newEndIndex !== endIndex) {
+                startIndex = newStartIndex;
+                endIndex = newEndIndex;
+                
+                // Clear and re-render visible items
+                const articlesWrapper = container.querySelector('.articles-container');
+                articlesWrapper.innerHTML = '';
+                articlesWrapper.appendChild(renderVisibleItems());
+            }
+        };
+
+        container.innerHTML = `
+            <div class="articles-header">
+                <h4>Artigos Disponíveis (${articles.length})</h4>
+                <div class="articles-actions">
+                    <button type="button" class="secondary small" onclick="app.selectAllArticles()">
+                        Selecionar Todos
+                    </button>
+                    <button type="button" class="secondary small" onclick="app.clearAllArticles()">
+                        Limpar Seleção
+                    </button>
+                </div>
+            </div>
+            <div class="articles-container" style="position: relative; height: 400px; overflow-y: auto;">
+                <div style="height: ${articles.length * itemHeight}px; position: relative;">
+                </div>
+            </div>
+        `;
+
+        const articlesWrapper = container.querySelector('.articles-container > div');
+        articlesWrapper.appendChild(renderVisibleItems());
+
+        // Add scroll listener with throttling
+        let scrollTimeout;
+        container.querySelector('.articles-container').addEventListener('scroll', () => {
+            if (scrollTimeout) clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(scrollHandler, 16); // ~60fps
+        });
+    }
+
+    /**
+     * Render articles with standard method for smaller lists
+     * @param {Array} articles - Array of article objects
+     * @param {HTMLElement} container - Container element
+     */
+    renderArticlesStandard(articles, container) {
+        // Use document fragment for better performance
+        const fragment = document.createDocumentFragment();
+        
+        articles.forEach((article, index) => {
             const isSelected = this.selectedArticles.has(index);
             const preview = article.text.length > 200 ? 
                 article.text.substring(0, 200) + '...' : 
                 article.text;
 
-            return `
-                <div class="article-item" data-index="${index}">
-                    <label class="article-label">
-                        <input type="checkbox" class="article-checkbox" 
-                               data-index="${index}" ${isSelected ? 'checked' : ''}>
-                        <strong>${article.title}</strong>
-                    </label>
-                    <div class="article-preview">
-                        ${preview}
-                    </div>
+            const articleDiv = document.createElement('div');
+            articleDiv.className = 'article-item';
+            articleDiv.dataset.index = index;
+            articleDiv.innerHTML = `
+                <label class="article-label">
+                    <input type="checkbox" class="article-checkbox" 
+                           data-index="${index}" ${isSelected ? 'checked' : ''}>
+                    <strong>${this.escapeHtml(article.title)}</strong>
+                </label>
+                <div class="article-preview">
+                    ${this.escapeHtml(preview)}
                 </div>
             `;
-        }).join('');
+            fragment.appendChild(articleDiv);
+        });
 
-        articlesContainer.innerHTML = `
+        container.innerHTML = `
             <div class="articles-header">
                 <h4>Artigos Disponíveis (${articles.length})</h4>
                 <div class="articles-actions">
@@ -1190,12 +2241,21 @@ class LexFlowApp {
                 </div>
             </div>
             <div class="articles-container">
-                ${articlesHtml}
             </div>
         `;
 
-        // Add CSS for articles if not already added
-        this.addArticlesCSS();
+        container.querySelector('.articles-container').appendChild(fragment);
+    }
+
+    /**
+     * Escape HTML to prevent XSS attacks
+     * @param {string} text - Text to escape
+     * @returns {string} - Escaped text
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     /**
@@ -1963,23 +3023,38 @@ ${outputArea.value}
     }
 
     /**
-     * Initialize collector view functionality
+     * Initialize collector view functionality with lazy loading
      */
-    initCollectorView() {
-        console.log('Collector view initialized');
+    async initCollectorView() {
+        const loadingToastId = this.showLoadingToast('Inicializando coletor...');
         
-        // Initialize collector state
-        this.selectedQueueItem = null;
-        this.queueItems = [];
-        
-        // Load queue items from database
-        this.loadQueueItems();
-        
-        // Set up auto-refresh for queue
-        this.setupQueueAutoRefresh();
-        
-        // Initialize event listeners
-        this.initCollectorEventListeners();
+        try {
+            console.log('Collector view initialized');
+            
+            // Initialize collector state
+            this.selectedQueueItem = null;
+            this.queueItems = [];
+            
+            // Load queue items from database with loading feedback
+            this.hideToast(loadingToastId);
+            const queueLoadingId = this.showLoadingToast('Carregando fila de captura...');
+            
+            await this.loadQueueItems();
+            
+            this.hideToast(queueLoadingId);
+            
+            // Set up auto-refresh for queue (lazy)
+            this.setupQueueAutoRefresh();
+            
+            // Initialize event listeners (lazy)
+            this.initCollectorEventListeners();
+            
+            this.showToast('Coletor pronto!', 'success', 2000);
+            
+        } catch (error) {
+            this.hideToast(loadingToastId);
+            throw error;
+        }
     }
 
     /**
@@ -2789,6 +3864,146 @@ ${outputArea.value}
      */
     clearToasts() {
         return this.toastSystem.clear();
+    }
+
+    /**
+     * Show toast with action button
+     * @param {string} message - The message to show
+     * @param {string} type - Toast type (success, error, info, warning)
+     * @param {number} duration - Duration in milliseconds
+     * @param {string} actionLabel - Label for action button
+     * @param {Function} actionHandler - Handler for action button
+     */
+    showToastWithAction(message, type = 'info', duration = 5000, actionLabel = 'Action', actionHandler = null) {
+        const actions = actionHandler ? [{
+            id: 'primary',
+            label: actionLabel,
+            handler: actionHandler
+        }] : [];
+
+        return this.toastSystem.show({
+            message: message,
+            actions: actions,
+            persistent: !!actionHandler
+        }, type, actionHandler ? 0 : duration);
+    }
+
+    /**
+     * Show loading toast with spinner
+     * @param {string} message - Loading message
+     * @returns {number} Toast ID for later dismissal
+     */
+    showLoadingToast(message = 'Carregando...') {
+        return this.toastSystem.loading(message);
+    }
+
+    /**
+     * Update loading toast with new message
+     * @param {number} toastId - Toast ID to update
+     * @param {string} message - New message
+     */
+    updateLoadingToast(toastId, message) {
+        // Hide old toast and show new one
+        this.hideToast(toastId);
+        return this.showLoadingToast(message);
+    }
+
+    /**
+     * Show offline mode toast
+     */
+    showOfflineToast() {
+        return this.showToastWithAction(
+            'Modo offline ativado. Algumas funcionalidades podem estar limitadas.',
+            'warning',
+            0,
+            'Entendi',
+            () => {} // Just dismiss
+        );
+    }
+
+    /**
+     * Show connection restored toast
+     */
+    showOnlineToast() {
+        return this.showToast('Conexão restaurada! Todas as funcionalidades disponíveis.', 'success', 4000);
+    }
+
+    /**
+     * Cache data with timestamp for performance optimization
+     * @param {string} key - Cache key
+     * @param {*} data - Data to cache
+     */
+    setCachedData(key, data) {
+        try {
+            const cacheEntry = {
+                data: data,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(`lexflow-cache-${key}`, JSON.stringify(cacheEntry));
+        } catch (error) {
+            console.warn('Failed to cache data:', error);
+        }
+    }
+
+    /**
+     * Get cached data if still valid
+     * @param {string} key - Cache key
+     * @param {number} maxAge - Maximum age in milliseconds
+     * @returns {*} - Cached data or null if expired/not found
+     */
+    getCachedData(key, maxAge = 5 * 60 * 1000) {
+        try {
+            const cached = localStorage.getItem(`lexflow-cache-${key}`);
+            if (!cached) return null;
+
+            const cacheEntry = JSON.parse(cached);
+            const age = Date.now() - cacheEntry.timestamp;
+
+            if (age > maxAge) {
+                localStorage.removeItem(`lexflow-cache-${key}`);
+                return null;
+            }
+
+            return cacheEntry.data;
+        } catch (error) {
+            console.warn('Failed to get cached data:', error);
+            return null;
+        }
+    }
+
+    /**
+     * Clear expired cache entries for performance
+     */
+    clearExpiredCache() {
+        try {
+            const keys = Object.keys(localStorage).filter(key => key.startsWith('lexflow-cache-'));
+            const now = Date.now();
+            let cleared = 0;
+
+            keys.forEach(key => {
+                try {
+                    const cached = localStorage.getItem(key);
+                    const cacheEntry = JSON.parse(cached);
+                    const age = now - cacheEntry.timestamp;
+
+                    // Clear entries older than 1 hour
+                    if (age > 60 * 60 * 1000) {
+                        localStorage.removeItem(key);
+                        cleared++;
+                    }
+                } catch (error) {
+                    // Remove corrupted cache entries
+                    localStorage.removeItem(key);
+                    cleared++;
+                }
+            });
+
+            if (cleared > 0) {
+                console.log(`Cleared ${cleared} expired cache entries`);
+            }
+        } catch (error) {
+            console.warn('Failed to clear expired cache:', error);
+        }
     }
 
     /**
