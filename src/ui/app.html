@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LexFlow — Legal Collector & AI</title>
+    <link rel="stylesheet" href="pico.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* SPA-specific styles */
+        body {
+            width: 800px;
+            height: 600px;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        .app-header {
+            background: var(--pico-background-color);
+            border-bottom: 1px solid var(--pico-muted-border-color);
+            padding: 1rem;
+            flex-shrink: 0;
+        }
+        
+        .app-nav {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .app-logo {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: var(--pico-primary-color);
+            margin-right: auto;
+        }
+        
+        .nav-tab {
+            padding: 0.5rem 1rem;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: var(--pico-border-radius);
+            transition: background-color 0.2s ease;
+        }
+        
+        .nav-tab:hover {
+            background: var(--pico-secondary-background);
+        }
+        
+        .nav-tab.active {
+            background: var(--pico-primary-color);
+            color: var(--pico-primary-inverse);
+        }
+        
+        .app-main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+        
+        .view {
+            display: none;
+        }
+        
+        .view.active {
+            display: block;
+        }
+        
+        /* Home view styles */
+        .feature-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .feature-card {
+            padding: 1.5rem;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        
+        .feature-card:hover {
+            border-color: var(--pico-primary-color);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        .feature-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .feature-description {
+            color: var(--pico-muted-color);
+            font-size: 0.9rem;
+        }
+        
+        /* Workspace view styles */
+        .workspace-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: var(--pico-card-background-color);
+            border-radius: var(--pico-border-radius);
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: var(--pico-border-radius);
+        }
+        
+        .step.active {
+            background: var(--pico-primary-color);
+            color: var(--pico-primary-inverse);
+        }
+        
+        .step.completed {
+            background: var(--pico-secondary-color);
+            color: var(--pico-secondary-inverse);
+        }
+        
+        .step-number {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: currentColor;
+            color: var(--pico-background-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        
+        .workspace-content {
+            min-height: 400px;
+        }
+        
+        .step-content {
+            display: none;
+        }
+        
+        .step-content.active {
+            display: block;
+        }
+        
+        /* Collector view styles */
+        .collector-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            height: 500px;
+        }
+        
+        .capture-queue {
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            padding: 1rem;
+            overflow-y: auto;
+        }
+        
+        .queue-item {
+            padding: 0.75rem;
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: border-color 0.2s ease;
+        }
+        
+        .queue-item:hover {
+            border-color: var(--pico-primary-color);
+        }
+        
+        .queue-item.selected {
+            border-color: var(--pico-primary-color);
+            background: var(--pico-primary-background);
+        }
+        
+        .editor-panel {
+            border: 1px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            padding: 1rem;
+            overflow-y: auto;
+        }
+        
+        /* Toast notification styles */
+        .toast-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .toast {
+            padding: 0.75rem 1rem;
+            border-radius: var(--pico-border-radius);
+            color: white;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-width: 250px;
+            animation: slideIn 0.3s ease;
+        }
+        
+        .toast.success {
+            background: var(--pico-ins-color);
+        }
+        
+        .toast.error {
+            background: var(--pico-del-color);
+        }
+        
+        .toast.info {
+            background: var(--pico-primary-color);
+        }
+        
+        .toast-icon {
+            font-size: 1rem;
+        }
+        
+        .toast-close {
+            margin-left: auto;
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            padding: 0;
+            font-size: 1.2rem;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Modal styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: var(--pico-card-background-color);
+            border-radius: var(--pico-border-radius);
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+        }
+        
+        /* Utility classes */
+        .hidden {
+            display: none !important;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .mb-1 { margin-bottom: 1rem; }
+        .mb-2 { margin-bottom: 2rem; }
+        .mt-1 { margin-top: 1rem; }
+        .mt-2 { margin-top: 2rem; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header with Navigation -->
+        <header class="app-header">
+            <nav class="app-nav">
+                <div class="app-logo">⚖️ LexFlow</div>
+                <button class="nav-tab active" data-view="home">Início</button>
+                <button class="nav-tab" data-view="workspace">Workspace Jurídico</button>
+                <button class="nav-tab" data-view="collector">Coletor & Curadoria</button>
+                <button class="nav-tab" data-view="settings">⚙️</button>
+            </nav>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="app-main">
+            <!-- Home View -->
+            <section id="home-view" class="view active">
+                <h2>Bem-vindo ao LexFlow</h2>
+                <p class="muted mb-2">Escolha uma das opções abaixo para começar:</p>
+                
+                <div class="feature-cards">
+                    <div class="feature-card" data-navigate="workspace">
+                        <div class="feature-icon">📚</div>
+                        <div class="feature-title">Workspace Jurídico</div>
+                        <div class="feature-description">
+                            Configure jurisdição, pesquise leis e gere análises com IA
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card" data-navigate="collector">
+                        <div class="feature-icon">📝</div>
+                        <div class="feature-title">Coletor & Curadoria</div>
+                        <div class="feature-description">
+                            Capture conteúdo legal da web e gere documentos estruturados
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <button class="nav-tab" data-view="settings">
+                        ⚙️ Configurações
+                    </button>
+                </div>
+                
+                <!-- Toast Demo Section -->
+                <div class="card mt-2">
+                    <h4>Demo do Sistema de Notificações</h4>
+                    <div class="grid2">
+                        <button onclick="app.toastSystem.success('Operação realizada com sucesso!')">
+                            Sucesso
+                        </button>
+                        <button onclick="app.toastSystem.error('Erro ao processar solicitação')">
+                            Erro
+                        </button>
+                        <button onclick="app.toastSystem.info('Informação importante')">
+                            Info
+                        </button>
+                        <button onclick="app.toastSystem.warning('Atenção necessária')">
+                            Aviso
+                        </button>
+                    </div>
+                    <div class="mt-1">
+                        <button onclick="app.showAdvancedToastDemo()" class="secondary">
+                            Demo Avançado
+                        </button>
+                        <button onclick="app.toastSystem.clear()" class="secondary">
+                            Limpar Todas
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Workspace View -->
+            <section id="workspace-view" class="view">
+                <h2>Workspace Jurídico</h2>
+                
+                <div class="workspace-steps">
+                    <div class="step active" data-step="1">
+                        <div class="step-number">1</div>
+                        <span>Jurisdição & Corpus</span>
+                    </div>
+                    <div class="step" data-step="2">
+                        <div class="step-number">2</div>
+                        <span>Leis & Artigos</span>
+                    </div>
+                    <div class="step" data-step="3">
+                        <div class="step-number">3</div>
+                        <span>Prompt Studio</span>
+                    </div>
+                </div>
+                
+                <div class="workspace-content">
+                    <!-- Step 1: Jurisdiction Configuration -->
+                    <div id="step-1" class="step-content active">
+                        <h3>Configuração de Jurisdição</h3>
+                        <p class="muted">Configure a jurisdição e corpus para pesquisa legal.</p>
+                        
+                        <div class="grid2">
+                            <div>
+                                <label for="language">Idioma:</label>
+                                <select id="language">
+                                    <option value="pt-BR">Português (Brasil)</option>
+                                    <option value="en-US">English (US)</option>
+                                    <option value="es-ES">Español</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="country">País:</label>
+                                <select id="country">
+                                    <option value="br">Brasil</option>
+                                    <option value="us">Estados Unidos</option>
+                                    <option value="es">Espanha</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="grid2">
+                            <div>
+                                <label for="state">Estado/Província:</label>
+                                <input type="text" id="state" placeholder="ex: Rio Grande do Sul">
+                            </div>
+                            <div>
+                                <label for="city">Cidade:</label>
+                                <input type="text" id="city" placeholder="ex: Porto Alegre">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-1">
+                            <label for="corpus-url">URL Base do Corpus:</label>
+                            <input type="url" id="corpus-url" 
+                                   placeholder="https://raw.githubusercontent.com/org/legal-corpus/main">
+                        </div>
+                        
+                        <div class="text-center mt-2">
+                            <button id="save-jurisdiction" class="primary">
+                                Salvar e Continuar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 2: Document Search -->
+                    <div id="step-2" class="step-content">
+                        <h3>Pesquisa de Documentos</h3>
+                        <p class="muted">Selecione documentos e artigos para análise.</p>
+                        
+                        <div class="mb-1">
+                            <label for="document-select">Documento:</label>
+                            <select id="document-select">
+                                <option value="">Selecione um documento...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-1">
+                            <label for="search-term">Buscar artigos:</label>
+                            <input type="text" id="search-term" placeholder="Digite um termo para buscar">
+                        </div>
+                        
+                        <div id="articles-list" class="mb-1">
+                            <!-- Articles will be populated here -->
+                        </div>
+                        
+                        <div class="mb-1">
+                            <label for="selected-context">Contexto Selecionado:</label>
+                            <textarea id="selected-context" rows="6" readonly 
+                                      placeholder="Os artigos selecionados aparecerão aqui..."></textarea>
+                        </div>
+                        
+                        <div class="text-center mt-2">
+                            <button id="prev-step-2" class="secondary">Anterior</button>
+                            <button id="next-step-2" class="primary">Próximo</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 3: Prompt Studio -->
+                    <div id="step-3" class="step-content">
+                        <h3>Prompt Studio</h3>
+                        <p class="muted">Configure e execute prompts com IA.</p>
+                        
+                        <div class="mb-1">
+                            <label for="preset-select">Preset:</label>
+                            <select id="preset-select">
+                                <option value="">Selecione um preset...</option>
+                                <option value="summary">Resumo Legal</option>
+                                <option value="analysis">Análise Jurídica</option>
+                                <option value="comparison">Comparação de Artigos</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-1">
+                            <label for="custom-prompt">Prompt Personalizado:</label>
+                            <textarea id="custom-prompt" rows="4" 
+                                      placeholder="Digite seu prompt personalizado..."></textarea>
+                        </div>
+                        
+                        <div class="text-center mb-1">
+                            <button id="execute-ai" class="primary">
+                                🤖 Executar IA
+                            </button>
+                        </div>
+                        
+                        <div class="mb-1">
+                            <label for="ai-output">Resultado:</label>
+                            <textarea id="ai-output" rows="8" readonly 
+                                      placeholder="O resultado da IA aparecerá aqui..."></textarea>
+                        </div>
+                        
+                        <div class="text-center mt-2">
+                            <button id="prev-step-3" class="secondary">Anterior</button>
+                            <button id="copy-result" class="primary">Copiar Resultado</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Collector View -->
+            <section id="collector-view" class="view">
+                <h2>Coletor & Curadoria</h2>
+                <p class="muted mb-2">Gerencie conteúdo capturado e gere documentos estruturados.</p>
+                
+                <div class="collector-layout">
+                    <div class="capture-queue">
+                        <h3>Fila de Captura <span id="queue-count" class="muted">(0)</span></h3>
+                        <div id="queue-items">
+                            <p class="muted text-center">Nenhum item na fila</p>
+                        </div>
+                    </div>
+                    
+                    <div class="editor-panel">
+                        <h3>Editor de Metadados</h3>
+                        <div id="editor-content">
+                            <p class="muted text-center">Selecione um item da fila para editar</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Configurações</h3>
+                <button class="modal-close" data-close-modal="settings">&times;</button>
+            </div>
+            
+            <form id="settings-form">
+                <div class="mb-1">
+                    <label for="settings-language">Idioma da Interface:</label>
+                    <select id="settings-language">
+                        <option value="pt-BR">Português (Brasil)</option>
+                        <option value="en-US">English (US)</option>
+                        <option value="es-ES">Español</option>
+                    </select>
+                </div>
+                
+                <div class="mb-1">
+                    <label for="settings-github-token">Token do GitHub (opcional):</label>
+                    <input type="password" id="settings-github-token" 
+                           placeholder="ghp_xxxxxxxxxxxx">
+                    <small class="muted">Para criação automática de issues</small>
+                </div>
+                
+                <div class="text-center mt-2">
+                    <button type="submit" class="primary">Salvar Configurações</button>
+                    <button type="button" class="secondary" data-close-modal="settings">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="toast.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
