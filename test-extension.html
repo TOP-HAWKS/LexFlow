@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Extension Loading</title>
+</head>
+<body>
+    <h1>Extension Test Page</h1>
+    <p>This page can be used to test the Chrome extension after loading it.</p>
+    <p>Right-click on this text to see if the context menu appears.</p>
+    
+    <script>
+        console.log('Test page loaded');
+        
+        // Test if extension is loaded
+        if (typeof chrome !== 'undefined' && chrome.runtime) {
+            console.log('Chrome extension APIs available');
+        } else {
+            console.log('Chrome extension APIs not available');
+        }
+    </script>
+</body>
+</html>

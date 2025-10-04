@@ -3,6 +3,9 @@
  * Manages hash-based routing, view switching, and core functionality
  */
 
+// Import database functions
+import { setSetting, getSetting, saveHistory, listHistory, addSubmission, listSubmissions, updateSubmission } from '../db.js';
+
 class LexFlowApp {
     constructor() {
         this.currentView = 'home';
@@ -1194,12 +1197,12 @@ class LexFlowApp {
         try {
             // Check if AI APIs are available
             if (!('ai' in self)) {
-                console.warn('Chrome AI not available: ai not in self');
+                console.info('Chrome AI not available: Built-in AI requires Chrome Canary with --enable-features=BuiltInAIAPI flag');
                 return false;
             }
 
             if (!('assistant' in self.ai) && !('summarizer' in self.ai)) {
-                console.warn('Chrome AI not available: no assistant or summarizer');
+                console.info('Chrome AI not available: No assistant or summarizer APIs found');
                 return false;
             }
 
@@ -1875,9 +1878,10 @@ class LexFlowApp {
         
         try {
             // Save to IndexedDB using existing db.js
-            if (typeof window.setSetting !== 'undefined') {
-                await window.setSetting('jurisdiction-config', settings);
-            } else {
+            try {
+                await setSetting('jurisdiction-config', settings);
+            } catch (error) {
+                console.warn('Failed to save to IndexedDB, using localStorage fallback:', error);
                 localStorage.setItem('lexflow-jurisdiction', JSON.stringify(settings));
             }
         } catch (error) {
@@ -1935,9 +1939,10 @@ class LexFlowApp {
             saveBtn.textContent = 'Salvando...';
             
             // Save to IndexedDB
-            if (typeof window.setSetting !== 'undefined') {
-                await window.setSetting('jurisdiction-config', settings);
-            } else {
+            try {
+                await setSetting('jurisdiction-config', settings);
+            } catch (error) {
+                console.warn('Failed to save to IndexedDB, using localStorage fallback:', error);
                 localStorage.setItem('lexflow-jurisdiction', JSON.stringify(settings));
             }
             
@@ -1969,8 +1974,10 @@ class LexFlowApp {
             let settings = null;
             
             // Try IndexedDB first
-            if (typeof window.getSetting !== 'undefined') {
-                settings = await window.getSetting('jurisdiction-config');
+            try {
+                settings = await getSetting('jurisdiction-config');
+            } catch (error) {
+                console.warn('Failed to load from IndexedDB:', error);
             }
             
             // Fallback to localStorage
@@ -3151,9 +3158,10 @@ NOTA: Esta é uma demonstração. A funcionalidade completa requer Chrome AI ati
             };
 
             // Save using db.js if available
-            if (typeof window.saveHistory !== 'undefined') {
-                await window.saveHistory(historyItem);
-            } else {
+            try {
+                await saveHistory(historyItem);
+            } catch (error) {
+                console.warn('Failed to save to IndexedDB, using localStorage fallback:', error);
                 // Fallback to localStorage
                 const history = JSON.parse(localStorage.getItem('lexflow-history') || '[]');
                 history.unshift(historyItem);
@@ -4445,10 +4453,11 @@ ${outputArea.value}
 
         try {
             // Save to IndexedDB using the existing db.js module
-            if (typeof window.setSetting !== 'undefined') {
+            try {
                 // Use IndexedDB if available
-                await window.setSetting('app-settings', settings);
-            } else {
+                await setSetting('app-settings', settings);
+            } catch (error) {
+                console.warn('Failed to save to IndexedDB, using localStorage fallback:', error);
                 // Fallback to localStorage
                 localStorage.setItem('lexflow-settings', JSON.stringify(settings));
             }
@@ -4477,8 +4486,10 @@ ${outputArea.value}
             let settings = null;
             
             // Try to load from IndexedDB first
-            if (typeof window.getSetting !== 'undefined') {
-                settings = await window.getSetting('app-settings');
+            try {
+                settings = await getSetting('app-settings');
+            } catch (error) {
+                console.warn('Failed to load from IndexedDB:', error);
             }
             
             // Fallback to localStorage
@@ -5040,9 +5051,10 @@ ${outputArea.value}
      */
     async getGitHubToken() {
         try {
-            if (typeof window.getSetting !== 'undefined') {
-                return await window.getSetting('github-token');
-            } else {
+            try {
+                return await getSetting('github-token');
+            } catch (error) {
+                console.warn('Failed to load GitHub token from IndexedDB:', error);
                 const settings = localStorage.getItem('lexflow-settings');
                 if (settings) {
                     const parsed = JSON.parse(settings);
@@ -5061,9 +5073,10 @@ ${outputArea.value}
      */
     async getGitHubRepo() {
         try {
-            if (typeof window.getSetting !== 'undefined') {
-                return await window.getSetting('github-repo');
-            } else {
+            try {
+                return await getSetting('github-repo');
+            } catch (error) {
+                console.warn('Failed to load GitHub repo from IndexedDB:', error);
                 const settings = localStorage.getItem('lexflow-settings');
                 if (settings) {
                     const parsed = JSON.parse(settings);
@@ -5171,10 +5184,11 @@ ${outputArea.value}
 
         try {
             // Save settings
-            if (typeof window.setSetting !== 'undefined') {
-                await window.setSetting('github-token', token);
-                await window.setSetting('github-repo', repo);
-            } else {
+            try {
+                await setSetting('github-token', token);
+                await setSetting('github-repo', repo);
+            } catch (error) {
+                console.warn('Failed to save GitHub settings to IndexedDB, using localStorage fallback:', error);
                 const settings = {
                     githubToken: token,
                     githubRepo: repo

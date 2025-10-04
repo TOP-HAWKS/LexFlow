@@ -68,9 +68,11 @@ export async function getSetting(k){
   });
 }
 
-// Make functions available globally for non-module usage
-window.setSetting = setSetting;
-window.getSetting = getSetting;
+// Make functions available globally for non-module usage (only in browser context)
+if (typeof window !== 'undefined') {
+  window.setSetting = setSetting;
+  window.getSetting = getSetting;
+}
 
 // Submissions queue (collector)
 export async function addSubmission(item){
