@@ -1,0 +1,25 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/>
+<title>LexFlow — Search & TOC</title>
+<link rel="stylesheet" href="styles.css"/>
+</head><body>
+  <h3>Select Documents & Articles</h3>
+  <div class="row">
+    <select id="doc">
+      <option value="federal/constituicao-federal-1988.md">Constituição (BR)</option>
+      <option value="federal/codigo-civil-2002.md">Código Civil (BR)</option>
+      <option value="federal/lei-inquilinato-8245-1991.md">Lei do Inquilinato (BR)</option>
+      <option value="state/rs/city/porto-alegre/lei-organica-porto-alegre.md">Lei Orgânica (Porto Alegre)</option>
+    </select>
+    <input id="q" placeholder="search term (e.g., 'locação')" />
+    <button id="load">Load</button>
+  </div>
+  <div id="results" class="card"></div>
+
+  <h4>Selected Context</h4>
+  <textarea id="context" rows="8" placeholder="Selected articles will appear here…"></textarea>
+  <div>
+    <button id="continue">Continue to Prompt</button>
+  </div>
+  <script type="module" src="search_toc.js"></script>
+</body></html>

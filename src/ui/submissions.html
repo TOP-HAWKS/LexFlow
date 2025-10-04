@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"/>
+<title>LexFlow — Submissions Queue</title>
+<link rel="stylesheet" href="styles.css"/>
+</head><body>
+  <h3>LexFlow — Submissions (Curation)</h3>
+  <div id="list"></div>
+
+  <h4>Selected Item</h4>
+  <div class="grid2">
+    <div>
+      <label>Title <input id="title"/></label>
+      <label>Jurisdiction <input id="jurisdiction" placeholder="e.g., BR-Federal / BR-RS-POA"/></label>
+      <label>Language <input id="language" value="pt-BR"/></label>
+      <label>Source URL <input id="source_url"/></label>
+      <label>Version Date <input id="version_date" placeholder="YYYY-MM-DD"/></label>
+    </div>
+    <div>
+      <textarea id="text" rows="12"></textarea>
+    </div>
+  </div>
+
+  <div class="row">
+    <button id="btnGenMd">Generate Markdown</button>
+    <button id="btnOpenIssue">Open GitHub Issue (pre-filled)</button>
+  </div>
+
+  <h4>Markdown Preview</h4>
+  <textarea id="md" rows="12"></textarea>
+
+  <script type="module" src="submissions.js"></script>
+</body></html>
