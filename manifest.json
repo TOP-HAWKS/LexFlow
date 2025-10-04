@@ -43,7 +43,7 @@
       "resources": [
         "src/ui/*.html",
         "src/ui/*.js",
-        "src/ui/styles.css"
+        "src/ui/*.css"
       ],
       "matches": [
         "<all_urls>"
