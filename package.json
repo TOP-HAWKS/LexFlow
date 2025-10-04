@@ -1,0 +1,18 @@
+{
+  "name": "lexflow-spa-refactor",
+  "version": "1.0.0",
+  "description": "LexFlow Chrome Extension SPA Refactor",
+  "type": "module",
+  "scripts": {
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest --coverage"
+  },
+  "devDependencies": {
+    "vitest": "^1.0.0",
+    "@vitest/ui": "^1.0.0",
+    "jsdom": "^23.0.0",
+    "@testing-library/dom": "^9.3.0",
+    "@testing-library/user-event": "^14.5.0"
+  }
+}
