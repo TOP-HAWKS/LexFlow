@@ -890,16 +890,174 @@ class LexFlowApp {
     }
 
     /**
-     * Update navigation tab states
+     * Update navigation state with enhanced features
      * @param {string} activeRoute - The currently active route
      */
     updateNavigationState(activeRoute) {
+        // Update navigation tabs
         document.querySelectorAll('.nav-tab').forEach(tab => {
             tab.classList.remove('active');
+            tab.removeAttribute('aria-current');
             if (tab.dataset.view === activeRoute) {
                 tab.classList.add('active');
+                tab.setAttribute('aria-current', 'page');
             }
         });
+        
+        // Update breadcrumb navigation
+        this.updateBreadcrumb(activeRoute);
+        
+        // Update navigation badges
+        this.updateNavigationBadges();
+        
+        // Announce view change to screen readers
+        this.announceViewChange(activeRoute);
+        
+        // Focus management
+        this.manageFocus(activeRoute);
+    }
+    
+    /**
+     * Update breadcrumb navigation
+     * @param {string} activeView - The currently active view
+     */
+    updateBreadcrumb(activeView) {
+        const breadcrumbNav = document.getElementById('breadcrumb-nav');
+        const currentSection = document.getElementById('current-section');
+        
+        if (!breadcrumbNav || !currentSection) return;
+        
+        const viewNames = {
+            'home': 'Início',
+            'workspace': 'Workspace Jurídico',
+            'collector': 'Coletor & Curadoria',
+            'settings': 'Configurações'
+        };
+        
+        if (activeView === 'home') {
+            breadcrumbNav.classList.add('hidden');
+        } else {
+            breadcrumbNav.classList.remove('hidden');
+            currentSection.textContent = viewNames[activeView] || activeView;
+            
+            // Add step information for workspace
+            if (activeView === 'workspace' && this.currentStep) {
+                const stepNames = {
+                    1: 'Jurisdição & Corpus',
+                    2: 'Leis & Artigos', 
+                    3: 'Prompt Studio'
+                };
+                currentSection.textContent += ` › ${stepNames[this.currentStep]}`;
+            }
+        }
+    }
+    
+    /**
+     * Update navigation badges with current status
+     */
+    updateNavigationBadges() {
+        // Workspace badge - show current step
+        const workspaceBadge = document.getElementById('workspace-badge');
+        if (workspaceBadge) {
+            if (this.currentView === 'workspace' && this.currentStep) {
+                workspaceBadge.textContent = this.currentStep;
+                workspaceBadge.classList.remove('hidden');
+                workspaceBadge.className = 'nav-badge';
+                
+                // Add success class if step is completed
+                if (this.workspaceStepCompleted && this.workspaceStepCompleted[this.currentStep]) {
+                    workspaceBadge.classList.add('success');
+                }
+            } else {
+                workspaceBadge.classList.add('hidden');
+            }
+        }
+        
+        // Collector badge - show queue count
+        const collectorBadge = document.getElementById('collector-badge');
+        if (collectorBadge) {
+            const queueCount = this.getCaptureQueueCount();
+            if (queueCount > 0) {
+                collectorBadge.textContent = queueCount;
+                collectorBadge.classList.remove('hidden');
+                collectorBadge.className = 'nav-badge';
+                
+                if (queueCount > 5) {
+                    collectorBadge.classList.add('warning');
+                }
+            } else {
+                collectorBadge.classList.add('hidden');
+            }
+        }
+    }
+    
+    /**
+     * Announce view changes to screen readers
+     * @param {string} activeView - The currently active view
+     */
+    announceViewChange(activeView) {
+        const viewNames = {
+            'home': 'Página inicial carregada',
+            'workspace': 'Workspace jurídico carregado',
+            'collector': 'Coletor e curadoria carregado',
+            'settings': 'Configurações abertas'
+        };
+        
+        const announcement = viewNames[activeView] || `${activeView} carregado`;
+        this.announceToScreenReader(announcement);
+    }
+    
+    /**
+     * Manage focus when switching views
+     * @param {string} activeView - The currently active view
+     */
+    manageFocus(activeView) {
+        // Focus the main content area for screen readers
+        const mainContent = document.getElementById('main-content');
+        if (mainContent) {
+            mainContent.focus();
+        }
+        
+        // Focus first interactive element in the view
+        setTimeout(() => {
+            const activeViewElement = document.getElementById(`${activeView}-view`);
+            if (activeViewElement) {
+                const firstFocusable = activeViewElement.querySelector(
+                    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                );
+                if (firstFocusable) {
+                    firstFocusable.focus();
+                }
+            }
+        }, 100);
+    }
+    
+    /**
+     * Announce message to screen readers
+     * @param {string} message - Message to announce
+     */
+    announceToScreenReader(message) {
+        const announcement = document.createElement('div');
+        announcement.setAttribute('aria-live', 'polite');
+        announcement.setAttribute('aria-atomic', 'true');
+        announcement.className = 'sr-only';
+        announcement.textContent = message;
+        
+        document.body.appendChild(announcement);
+        
+        // Remove after announcement
+        setTimeout(() => {
+            document.body.removeChild(announcement);
+        }, 1000);
+    }
+    
+    /**
+     * Get current capture queue count
+     * @returns {number} Number of items in capture queue
+     */
+    getCaptureQueueCount() {
+        // This will be implemented when we have the capture queue data
+        return this.captureQueue ? this.captureQueue.length : 0;
     }
 
     /**
@@ -975,6 +1133,9 @@ class LexFlowApp {
         const loadingToastId = this.showLoadingToast('Inicializando workspace...');
         
         try {
+            // Initialize step tracking
+            this.initWorkspaceStepTracking();
+            
             // Step navigation
             await this.initWorkspaceSteps();
             
@@ -1335,39 +1496,108 @@ class LexFlowApp {
             this.goToWorkspaceStep(2);
         });
 
-        // Direct step navigation
+        // Direct step navigation with keyboard support
         document.querySelectorAll('.step[data-step]').forEach(step => {
             step.addEventListener('click', (e) => {
                 const stepNumber = parseInt(e.currentTarget.dataset.step);
                 this.goToWorkspaceStep(stepNumber);
             });
+            
+            // Keyboard navigation for steps
+            step.addEventListener('keydown', (e) => {
+                const stepNumber = parseInt(e.currentTarget.dataset.step);
+                
+                switch (e.key) {
+                    case 'Enter':
+                    case ' ':
+                        e.preventDefault();
+                        this.goToWorkspaceStep(stepNumber);
+                        break;
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        if (stepNumber > 1) {
+                            this.goToWorkspaceStep(stepNumber - 1);
+                        }
+                        break;
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        if (stepNumber < 3) {
+                            this.goToWorkspaceStep(stepNumber + 1);
+                        }
+                        break;
+                    case 'Home':
+                        e.preventDefault();
+                        this.goToWorkspaceStep(1);
+                        break;
+                    case 'End':
+                        e.preventDefault();
+                        this.goToWorkspaceStep(3);
+                        break;
+                }
+            });
         });
     }
 
     /**
-     * Navigate to a specific workspace step
+     * Navigate to a specific workspace step with enhanced features
      * @param {number} stepNumber - The step number to navigate to
      */
     goToWorkspaceStep(stepNumber) {
-        // Update step indicators
+        if (stepNumber < 1 || stepNumber > 3) return;
+        
+        // Update step indicators with ARIA attributes
         document.querySelectorAll('.step').forEach((step, index) => {
             step.classList.remove('active', 'completed');
+            step.setAttribute('aria-selected', 'false');
+            step.setAttribute('tabindex', '-1');
+            
             if (index + 1 === stepNumber) {
                 step.classList.add('active');
+                step.setAttribute('aria-selected', 'true');
+                step.setAttribute('tabindex', '0');
             } else if (index + 1 < stepNumber) {
                 step.classList.add('completed');
             }
         });
 
-        // Show/hide step content
+        // Show/hide step content with ARIA attributes
         document.querySelectorAll('.step-content').forEach((content, index) => {
             content.classList.remove('active');
+            content.setAttribute('aria-hidden', 'true');
+            
             if (index + 1 === stepNumber) {
                 content.classList.add('active');
+                content.setAttribute('aria-hidden', 'false');
             }
         });
 
         this.currentStep = stepNumber;
+        
+        // Update breadcrumb and navigation
+        this.updateBreadcrumb('workspace');
+        this.updateNavigationBadges();
+        
+        // Announce step change to screen readers
+        const stepNames = {
+            1: 'Jurisdição e Corpus',
+            2: 'Leis e Artigos',
+            3: 'Prompt Studio'
+        };
+        this.announceToScreenReader(`Navegou para etapa ${stepNumber}: ${stepNames[stepNumber]}`);
+        
+        // Focus management for the new step
+        setTimeout(() => {
+            const activeStepContent = document.querySelector('.step-content.active');
+            if (activeStepContent) {
+                const firstFocusable = activeStepContent.querySelector(
+                    'input:not([disabled]), select:not([disabled]), button:not([disabled]), textarea:not([disabled])'
+                );
+                if (firstFocusable) {
+                    firstFocusable.focus();
+                }
+            }
+        }, 100);
+        
         this.showToast(`Navegando para Etapa ${stepNumber}`, 'info', 1500);
     }
 
@@ -1378,8 +1608,11 @@ class LexFlowApp {
         // Load saved settings
         this.loadJurisdictionSettings();
         
-        // Add real-time validation
-        this.initJurisdictionValidation();
+        // Add real-time validation with accessibility
+        const step1Container = document.getElementById('step-1');
+        if (step1Container) {
+            this.addRealTimeValidation(step1Container);
+        }
         
         // Add form field event listeners
         this.initJurisdictionEventListeners();
@@ -4007,16 +4240,30 @@ ${outputArea.value}
     }
 
     /**
-     * Initialize event listeners
+     * Initialize event listeners with keyboard navigation support
      */
     initEventListeners() {
-        // Navigation tabs
+        // Navigation tabs with keyboard support
         document.querySelectorAll('.nav-tab[data-view]').forEach(tab => {
             tab.addEventListener('click', (e) => {
                 e.preventDefault();
                 const view = e.currentTarget.dataset.view;
                 this.navigate(view);
             });
+            
+            // Keyboard navigation for tabs
+            tab.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    const view = e.currentTarget.dataset.view;
+                    this.navigate(view);
+                }
+            });
+        });
+        
+        // Global keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            this.handleGlobalKeyboard(e);
         });
 
         // Modal close buttons
@@ -5139,6 +5386,255 @@ ${markdown}
         
         document.head.appendChild(style);
     }
+    
+    /**
+     * Handle global keyboard shortcuts and navigation
+     * @param {KeyboardEvent} e - Keyboard event
+     */
+    handleGlobalKeyboard(e) {
+        // Skip if user is typing in an input field
+        if (e.target.matches('input, textarea, select, [contenteditable]')) {
+            return;
+        }
+        
+        // Handle keyboard shortcuts
+        if (e.ctrlKey || e.metaKey) {
+            switch (e.key) {
+                case '1':
+                    e.preventDefault();
+                    this.navigate('home');
+                    break;
+                case '2':
+                    e.preventDefault();
+                    this.navigate('workspace');
+                    break;
+                case '3':
+                    e.preventDefault();
+                    this.navigate('collector');
+                    break;
+                case ',':
+                    e.preventDefault();
+                    this.navigate('settings');
+                    break;
+            }
+        }
+        
+        // Handle escape key
+        if (e.key === 'Escape') {
+            // Close any open modals
+            const openModal = document.querySelector('.modal-overlay.active');
+            if (openModal) {
+                const modalName = openModal.id.replace('-modal', '');
+                this.hideModal(modalName);
+                return;
+            }
+            
+            // Navigate to home if not already there
+            if (this.currentView !== 'home') {
+                this.navigate('home');
+            }
+        }
+        
+        // Handle arrow keys for workspace steps
+        if (this.currentView === 'workspace') {
+            if (e.key === 'ArrowLeft' && this.currentStep > 1) {
+                e.preventDefault();
+                this.goToWorkspaceStep(this.currentStep - 1);
+            } else if (e.key === 'ArrowRight' && this.currentStep < 3) {
+                e.preventDefault();
+                this.goToWorkspaceStep(this.currentStep + 1);
+            }
+        }
+        
+        // Handle tab navigation with Alt key
+        if (e.altKey) {
+            const views = ['home', 'workspace', 'collector'];
+            const currentIndex = views.indexOf(this.currentView);
+            
+            if (e.key === 'ArrowLeft' && currentIndex > 0) {
+                e.preventDefault();
+                this.navigate(views[currentIndex - 1]);
+            } else if (e.key === 'ArrowRight' && currentIndex < views.length - 1) {
+                e.preventDefault();
+                this.navigate(views[currentIndex + 1]);
+            }
+        }
+    }
+    
+    /**
+     * Initialize workspace step completion tracking
+     */
+    initWorkspaceStepTracking() {
+        if (!this.workspaceStepCompleted) {
+            this.workspaceStepCompleted = {
+                1: false,
+                2: false,
+                3: false
+            };
+        }
+    }
+    
+    /**
+     * Enhanced form validation with accessibility
+     * @param {HTMLFormElement} form - Form to validate
+     * @returns {boolean} - True if form is valid
+     */
+    validateFormWithAccessibility(form) {
+        let isValid = true;
+        const firstErrorField = null;
+        
+        // Clear previous validation states
+        form.querySelectorAll('.form-field').forEach(field => {
+            field.classList.remove('error', 'success');
+        });
+        
+        // Validate required fields
+        form.querySelectorAll('[required]').forEach(field => {
+            const formField = field.closest('.form-field');
+            const errorMessage = formField?.querySelector('.error-message');
+            
+            if (!field.value.trim()) {
+                isValid = false;
+                formField?.classList.add('error');
+                field.setAttribute('aria-invalid', 'true');
+                
+                if (errorMessage) {
+                    errorMessage.textContent = `${field.labels[0]?.textContent || 'Campo'} é obrigatório`;
+                }
+                
+                if (!firstErrorField) {
+                    firstErrorField = field;
+                }
+            } else {
+                formField?.classList.add('success');
+                field.setAttribute('aria-invalid', 'false');
+            }
+        });
+        
+        // Validate URL fields
+        form.querySelectorAll('input[type="url"]').forEach(field => {
+            const formField = field.closest('.form-field');
+            const errorMessage = formField?.querySelector('.error-message');
+            
+            if (field.value && !this.isValidUrl(field.value)) {
+                isValid = false;
+                formField?.classList.add('error');
+                field.setAttribute('aria-invalid', 'true');
+                
+                if (errorMessage) {
+                    errorMessage.textContent = 'URL inválida';
+                }
+                
+                if (!firstErrorField) {
+                    firstErrorField = field;
+                }
+            }
+        });
+        
+        // Focus first error field and announce errors
+        if (!isValid && firstErrorField) {
+            firstErrorField.focus();
+            this.announceToScreenReader('Formulário contém erros. Verifique os campos destacados.');
+        } else if (isValid) {
+            this.announceToScreenReader('Formulário válido');
+        }
+        
+        return isValid;
+    }
+    
+    /**
+     * Validate URL format
+     * @param {string} url - URL to validate
+     * @returns {boolean} - True if valid URL
+     */
+    isValidUrl(url) {
+        try {
+            new URL(url);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+    
+    /**
+     * Add real-time validation to form fields
+     * @param {HTMLElement} container - Container with form fields
+     */
+    addRealTimeValidation(container) {
+        container.querySelectorAll('input, select, textarea').forEach(field => {
+            // Validate on blur
+            field.addEventListener('blur', () => {
+                this.validateSingleField(field);
+            });
+            
+            // Clear error state on input
+            field.addEventListener('input', () => {
+                const formField = field.closest('.form-field');
+                if (formField?.classList.contains('error')) {
+                    formField.classList.remove('error');
+                    field.setAttribute('aria-invalid', 'false');
+                }
+            });
+        });
+    }
+    
+    /**
+     * Validate single form field
+     * @param {HTMLElement} field - Field to validate
+     */
+    validateSingleField(field) {
+        const formField = field.closest('.form-field');
+        const errorMessage = formField?.querySelector('.error-message');
+        let isValid = true;
+        let message = '';
+        
+        // Required field validation
+        if (field.hasAttribute('required') && !field.value.trim()) {
+            isValid = false;
+            message = `${field.labels[0]?.textContent || 'Campo'} é obrigatório`;
+        }
+        
+        // URL validation
+        if (field.type === 'url' && field.value && !this.isValidUrl(field.value)) {
+            isValid = false;
+            message = 'URL inválida';
+        }
+        
+        // Update field state
+        if (isValid) {
+            formField?.classList.remove('error');
+            formField?.classList.add('success');
+            field.setAttribute('aria-invalid', 'false');
+        } else {
+            formField?.classList.remove('success');
+            formField?.classList.add('error');
+            field.setAttribute('aria-invalid', 'true');
+            
+            if (errorMessage) {
+                errorMessage.textContent = message;
+            }
+        }
+        
+        return isValid;
+    }
+    
+    /**
+     * Mark workspace step as completed
+     * @param {number} step - Step number to mark as completed
+     */
+    markWorkspaceStepCompleted(step) {
+        this.initWorkspaceStepTracking();
+        this.workspaceStepCompleted[step] = true;
+        this.updateNavigationBadges();
+        
+        // Update step visual state
+        const stepElement = document.querySelector(`.step[data-step="${step}"]`);
+        if (stepElement) {
+            stepElement.classList.add('completed');
+        }
+    }
+    
+
 }
 
 // Initialize app when DOM is loaded

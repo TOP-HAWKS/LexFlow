@@ -8,6 +8,39 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="performance.css">
     <style>
+        /* Custom Pico.css Theme Adjustments */
+        :root {
+            --pico-primary-color: #2563eb;
+            --pico-primary-hover: #1d4ed8;
+            --pico-primary-background: #eff6ff;
+            --pico-primary-inverse: #ffffff;
+            --pico-secondary-color: #059669;
+            --pico-secondary-hover: #047857;
+            --pico-secondary-background: #ecfdf5;
+            --pico-del-color: #dc2626;
+            --pico-ins-color: #059669;
+            --pico-color-amber-500: #f59e0b;
+            --pico-border-radius: 0.5rem;
+            --pico-spacing: 1rem;
+            --pico-font-size: 0.875rem;
+            --pico-line-height: 1.5;
+            --pico-font-weight: 400;
+            --pico-font-weight-bold: 600;
+            --pico-transition: all 0.2s ease;
+        }
+        
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --pico-primary-color: #3b82f6;
+                --pico-primary-hover: #2563eb;
+                --pico-primary-background: #1e3a8a;
+                --pico-secondary-color: #10b981;
+                --pico-secondary-hover: #059669;
+                --pico-secondary-background: #064e3b;
+            }
+        }
+        
         /* SPA-specific styles */
         body {
             width: 800px;
@@ -15,6 +48,8 @@
             margin: 0;
             padding: 0;
             overflow: hidden;
+            font-size: var(--pico-font-size);
+            line-height: var(--pico-line-height);
         }
         
         .app-container {
@@ -54,11 +89,140 @@
         
         .nav-tab:hover {
             background: var(--pico-secondary-background);
+            transform: translateY(-1px);
+        }
+        
+        .nav-tab:focus {
+            outline: 2px solid var(--pico-primary-color);
+            outline-offset: 2px;
         }
         
         .nav-tab.active {
             background: var(--pico-primary-color);
             color: var(--pico-primary-inverse);
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+        }
+        
+        /* Enhanced Button Styles */
+        button {
+            font-weight: var(--pico-font-weight-bold);
+            border-radius: var(--pico-border-radius);
+            transition: var(--pico-transition);
+            cursor: pointer;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: var(--pico-font-size);
+        }
+        
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        button:focus {
+            outline: 2px solid var(--pico-primary-color);
+            outline-offset: 2px;
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        button.primary {
+            background: var(--pico-primary-color);
+            color: var(--pico-primary-inverse);
+        }
+        
+        button.primary:hover:not(:disabled) {
+            background: var(--pico-primary-hover);
+        }
+        
+        button.secondary {
+            background: var(--pico-secondary-color);
+            color: var(--pico-primary-inverse);
+        }
+        
+        button.secondary:hover:not(:disabled) {
+            background: var(--pico-secondary-hover);
+        }
+        
+        button.outline {
+            background: transparent;
+            border: 2px solid var(--pico-primary-color);
+            color: var(--pico-primary-color);
+        }
+        
+        button.outline:hover:not(:disabled) {
+            background: var(--pico-primary-color);
+            color: var(--pico-primary-inverse);
+        }
+        
+        .nav-badge {
+            display: inline-block;
+            background: var(--pico-del-color);
+            color: white;
+            font-size: 0.7rem;
+            padding: 0.2rem 0.4rem;
+            border-radius: 50%;
+            margin-left: 0.5rem;
+            min-width: 1.2rem;
+            text-align: center;
+            line-height: 1;
+        }
+        
+        .nav-badge.success {
+            background: var(--pico-ins-color);
+        }
+        
+        .nav-badge.warning {
+            background: var(--pico-color-amber-500);
+        }
+        
+        /* Breadcrumb Navigation */
+        .breadcrumb-nav {
+            padding: 0.5rem 1rem;
+            background: var(--pico-card-background-color);
+            border-bottom: 1px solid var(--pico-muted-border-color);
+            font-size: 0.9rem;
+        }
+        
+        .breadcrumb {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .breadcrumb li:not(:last-child)::after {
+            content: '›';
+            margin-left: 0.5rem;
+            color: var(--pico-muted-color);
+        }
+        
+        .breadcrumb-link {
+            color: var(--pico-primary-color);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        
+        .breadcrumb-link:hover {
+            color: var(--pico-primary-hover);
+            text-decoration: underline;
+        }
+        
+        .breadcrumb-current {
+            color: var(--pico-color);
+            font-weight: 500;
         }
         
         .app-main {
@@ -94,7 +258,18 @@
         
         .feature-card:hover {
             border-color: var(--pico-primary-color);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        .feature-card:focus {
+            outline: 2px solid var(--pico-primary-color);
+            outline-offset: 2px;
+        }
+        
+        .feature-card:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
         }
         
         .feature-icon {
@@ -139,6 +314,35 @@
         .step.completed {
             background: var(--pico-secondary-color);
             color: var(--pico-secondary-inverse);
+            position: relative;
+        }
+        
+        .step.completed::after {
+            content: '✓';
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: var(--pico-ins-color);
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+        
+        .step:hover {
+            cursor: pointer;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .step:focus {
+            outline: 2px solid var(--pico-primary-color);
+            outline-offset: 2px;
         }
         
         .step-number {
@@ -292,6 +496,12 @@
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border: 1px solid var(--pico-muted-border-color);
+        }
+        
+        .modal-overlay.active .modal {
+            animation: slideIn 0.3s ease-out;
         }
         
         .modal-header {
@@ -309,14 +519,50 @@
             padding: 0;
         }
         
-        /* Form validation styles */
+        /* Enhanced Form Accessibility and Validation */
         .form-field {
             position: relative;
+            margin-bottom: 1rem;
+        }
+        
+        .form-field label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: var(--pico-font-weight-bold);
+            color: var(--pico-color);
+        }
+        
+        .form-field input,
+        .form-field select,
+        .form-field textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            font-size: var(--pico-font-size);
+            transition: var(--pico-transition);
+            background: var(--pico-background-color);
+        }
+        
+        .form-field input:focus,
+        .form-field select:focus,
+        .form-field textarea:focus {
+            outline: none;
+            border-color: var(--pico-primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
         
         .form-field.error input,
-        .form-field.error select {
+        .form-field.error select,
+        .form-field.error textarea {
             border-color: var(--pico-del-color);
+            background-color: rgba(220, 38, 38, 0.05);
+        }
+        
+        .form-field.error input:focus,
+        .form-field.error select:focus,
+        .form-field.error textarea:focus {
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
         }
         
         .form-field .error-message {
@@ -324,6 +570,7 @@
             font-size: 0.8rem;
             margin-top: 0.25rem;
             display: none;
+            font-weight: var(--pico-font-weight);
         }
         
         .form-field.error .error-message {
@@ -331,8 +578,95 @@
         }
         
         .form-field.success input,
-        .form-field.success select {
+        .form-field.success select,
+        .form-field.success textarea {
             border-color: var(--pico-ins-color);
+            background-color: rgba(5, 150, 105, 0.05);
+        }
+        
+        .form-field.success input:focus,
+        .form-field.success select:focus,
+        .form-field.success textarea:focus {
+            box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+        }
+        
+        /* Required field indicator */
+        .form-field label[required]::after,
+        .form-field label.required::after {
+            content: ' *';
+            color: var(--pico-del-color);
+        }
+        
+        /* Help text */
+        .form-field .help-text {
+            font-size: 0.8rem;
+            color: var(--pico-muted-color);
+            margin-top: 0.25rem;
+        }
+        
+        /* Accessibility and Focus Management */
+        .focus-visible:focus {
+            outline: 2px solid var(--pico-primary-color);
+            outline-offset: 2px;
+        }
+        
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 6px;
+            background: var(--pico-primary-color);
+            color: var(--pico-primary-inverse);
+            padding: 8px;
+            text-decoration: none;
+            border-radius: 4px;
+            z-index: 1001;
+        }
+        
+        .skip-link:focus {
+            top: 6px;
+        }
+        
+        /* High Contrast Mode Support */
+        @media (prefers-contrast: high) {
+            .feature-card {
+                border-width: 2px;
+            }
+            
+            .nav-tab {
+                border: 1px solid var(--pico-muted-border-color);
+            }
+            
+            .toast {
+                border: 2px solid rgba(255, 255, 255, 0.5);
+            }
+        }
+        
+        /* Reduced Motion Support */
+        @media (prefers-reduced-motion: reduce) {
+            .toast {
+                animation: none;
+            }
+            
+            .feature-card {
+                transition: none;
+            }
+            
+            .nav-tab {
+                transition: none;
+            }
+        }
+        
+        /* Screen Reader Only Content */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
         }
         
         /* Utility classes */
@@ -340,9 +674,60 @@
             display: none !important;
         }
         
+        /* Loading States and Animations */
         .loading {
             opacity: 0.6;
             pointer-events: none;
+            position: relative;
+        }
+        
+        .loading::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin: -10px 0 0 -10px;
+            border: 2px solid var(--pico-primary-color);
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Pulse animation for loading elements */
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Fade in animation for new content */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Slide in animation for modals */
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
         
         .text-center {
@@ -356,20 +741,39 @@
     </style>
 </head>
 <body>
-    <div class="app-container">
+    <!-- Skip Link for Accessibility -->
+    <a href="#main-content" class="skip-link">Pular para o conteúdo principal</a>
+    
+    <div class="app-container" role="application" aria-label="LexFlow - Aplicação Legal">
         <!-- Header with Navigation -->
         <header class="app-header">
             <nav class="app-nav">
                 <div class="app-logo">⚖️ LexFlow</div>
-                <button class="nav-tab active" data-view="home">Início</button>
-                <button class="nav-tab" data-view="workspace">Workspace Jurídico</button>
-                <button class="nav-tab" data-view="collector">Coletor & Curadoria</button>
-                <button class="nav-tab" data-view="settings">⚙️</button>
+                <button class="nav-tab active" data-view="home" aria-label="Página inicial">Início</button>
+                <button class="nav-tab" data-view="workspace" aria-label="Workspace jurídico">
+                    Workspace Jurídico
+                    <span id="workspace-badge" class="nav-badge hidden" aria-label="Etapa atual"></span>
+                </button>
+                <button class="nav-tab" data-view="collector" aria-label="Coletor e curadoria">
+                    Coletor & Curadoria
+                    <span id="collector-badge" class="nav-badge hidden" aria-label="Itens na fila"></span>
+                </button>
+                <button class="nav-tab" data-view="settings" aria-label="Configurações">⚙️</button>
             </nav>
+            
+            <!-- Breadcrumb Navigation -->
+            <div id="breadcrumb-nav" class="breadcrumb-nav hidden">
+                <nav aria-label="Navegação estrutural">
+                    <ol class="breadcrumb">
+                        <li><a href="#home" class="breadcrumb-link">Início</a></li>
+                        <li id="current-section" class="breadcrumb-current" aria-current="page"></li>
+                    </ol>
+                </nav>
+            </div>
         </header>
 
         <!-- Main Content Area -->
-        <main class="app-main">
+        <main id="main-content" class="app-main" role="main" tabindex="-1">
             <!-- Home View -->
             <section id="home-view" class="view active">
                 <h2>Bem-vindo ao LexFlow</h2>
@@ -404,16 +808,22 @@
             <section id="workspace-view" class="view">
                 <h2>Workspace Jurídico</h2>
                 
-                <div class="workspace-steps">
-                    <div class="step active" data-step="1">
+                <div class="workspace-steps" role="tablist" aria-label="Etapas do workspace jurídico">
+                    <div class="step active" data-step="1" role="tab" tabindex="0" 
+                         aria-selected="true" aria-controls="step-1" 
+                         aria-label="Etapa 1: Configuração de Jurisdição e Corpus">
                         <div class="step-number">1</div>
                         <span>Jurisdição & Corpus</span>
                     </div>
-                    <div class="step" data-step="2">
+                    <div class="step" data-step="2" role="tab" tabindex="-1"
+                         aria-selected="false" aria-controls="step-2"
+                         aria-label="Etapa 2: Seleção de Leis e Artigos">
                         <div class="step-number">2</div>
                         <span>Leis & Artigos</span>
                     </div>
-                    <div class="step" data-step="3">
+                    <div class="step" data-step="3" role="tab" tabindex="-1"
+                         aria-selected="false" aria-controls="step-3"
+                         aria-label="Etapa 3: Prompt Studio e Execução de IA">
                         <div class="step-number">3</div>
                         <span>Prompt Studio</span>
                     </div>
@@ -421,44 +831,58 @@
                 
                 <div class="workspace-content">
                     <!-- Step 1: Jurisdiction Configuration -->
-                    <div id="step-1" class="step-content active">
+                    <div id="step-1" class="step-content active" role="tabpanel" 
+                         aria-labelledby="step-1-tab" tabindex="0">
                         <h3>Configuração de Jurisdição</h3>
                         <p class="muted">Configure a jurisdição e corpus para pesquisa legal.</p>
                         
                         <div class="grid2">
-                            <div>
-                                <label for="language">Idioma:</label>
-                                <select id="language">
+                            <div class="form-field">
+                                <label for="language" class="required">Idioma:</label>
+                                <select id="language" required aria-describedby="language-help">
                                     <option value="pt-BR">Português (Brasil)</option>
                                     <option value="en-US">English (US)</option>
                                     <option value="es-ES">Español</option>
                                 </select>
+                                <div id="language-help" class="help-text">Selecione o idioma para a interface e documentos</div>
+                                <div class="error-message" role="alert">Por favor, selecione um idioma</div>
                             </div>
-                            <div>
-                                <label for="country">País:</label>
-                                <select id="country">
+                            <div class="form-field">
+                                <label for="country" class="required">País:</label>
+                                <select id="country" required aria-describedby="country-help">
                                     <option value="br">Brasil</option>
                                     <option value="us">Estados Unidos</option>
                                     <option value="es">Espanha</option>
                                 </select>
+                                <div id="country-help" class="help-text">País da jurisdição legal</div>
+                                <div class="error-message" role="alert">Por favor, selecione um país</div>
                             </div>
                         </div>
                         
                         <div class="grid2">
-                            <div>
+                            <div class="form-field">
                                 <label for="state">Estado/Província:</label>
-                                <input type="text" id="state" placeholder="ex: Rio Grande do Sul">
+                                <input type="text" id="state" placeholder="ex: Rio Grande do Sul" 
+                                       aria-describedby="state-help">
+                                <div id="state-help" class="help-text">Estado ou província da jurisdição</div>
+                                <div class="error-message" role="alert">Estado inválido</div>
                             </div>
-                            <div>
+                            <div class="form-field">
                                 <label for="city">Cidade:</label>
-                                <input type="text" id="city" placeholder="ex: Porto Alegre">
+                                <input type="text" id="city" placeholder="ex: Porto Alegre"
+                                       aria-describedby="city-help">
+                                <div id="city-help" class="help-text">Cidade da jurisdição (opcional)</div>
+                                <div class="error-message" role="alert">Cidade inválida</div>
                             </div>
                         </div>
                         
-                        <div class="mb-1">
-                            <label for="corpus-url">URL Base do Corpus:</label>
-                            <input type="url" id="corpus-url" 
-                                   placeholder="https://raw.githubusercontent.com/org/legal-corpus/main">
+                        <div class="form-field">
+                            <label for="corpus-url" class="required">URL Base do Corpus:</label>
+                            <input type="url" id="corpus-url" required
+                                   placeholder="https://raw.githubusercontent.com/org/legal-corpus/main"
+                                   aria-describedby="corpus-url-help">
+                            <div id="corpus-url-help" class="help-text">URL base do repositório de documentos legais</div>
+                            <div class="error-message" role="alert">URL inválida ou obrigatória</div>
                         </div>
                         
                         <div class="text-center mt-2">
@@ -469,7 +893,8 @@
                     </div>
                     
                     <!-- Step 2: Document Search -->
-                    <div id="step-2" class="step-content">
+                    <div id="step-2" class="step-content" role="tabpanel" 
+                         aria-labelledby="step-2-tab" tabindex="0" aria-hidden="true">
                         <h3>Pesquisa de Documentos</h3>
                         <p class="muted">Selecione documentos e artigos para análise.</p>
                         
@@ -502,7 +927,8 @@
                     </div>
                     
                     <!-- Step 3: Prompt Studio -->
-                    <div id="step-3" class="step-content">
+                    <div id="step-3" class="step-content" role="tabpanel" 
+                         aria-labelledby="step-3-tab" tabindex="0" aria-hidden="true">
                         <h3>Prompt Studio</h3>
                         <p class="muted">Configure e execute prompts com IA.</p>
                         
