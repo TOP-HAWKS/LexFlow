@@ -68,6 +68,10 @@ export async function getSetting(k){
   });
 }
 
+// Make functions available globally for non-module usage
+window.setSetting = setSetting;
+window.getSetting = getSetting;
+
 // Submissions queue (collector)
 export async function addSubmission(item){
   const db = await openDB();

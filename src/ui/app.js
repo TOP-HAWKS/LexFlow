@@ -14,16 +14,21 @@ class LexFlowApp {
             'settings': () => this.showModal('settings')
         };
         
-        this.init();
+        // Initialize asynchronously
+        this.init().catch(console.error);
     }
 
     /**
      * Initialize the application
      */
-    init() {
+    async init() {
         this.initRouter();
         this.initEventListeners();
         this.initToastSystem();
+        
+        // Load settings on startup
+        await this.loadSettings();
+        
         this.loadInitialView();
         
         console.log('LexFlow SPA initialized');
@@ -132,13 +137,35 @@ class LexFlowApp {
      * Initialize home view functionality
      */
     initHomeView() {
-        // Feature card navigation
+        // Feature card navigation with enhanced feedback
         document.querySelectorAll('.feature-card[data-navigate]').forEach(card => {
             card.addEventListener('click', (e) => {
                 const target = e.currentTarget.dataset.navigate;
-                this.navigate(target);
+                const title = e.currentTarget.querySelector('.feature-title').textContent;
+                
+                // Add visual feedback
+                card.style.transform = 'scale(0.98)';
+                setTimeout(() => {
+                    card.style.transform = '';
+                }, 150);
+                
+                // Show navigation toast
+                this.showToast(`Navegando para ${title}`, 'info', 1500);
+                
+                // Navigate after brief delay for better UX
+                setTimeout(() => {
+                    this.navigate(target);
+                }, 200);
             });
         });
+
+        // Settings button functionality
+        const settingsButton = document.getElementById('settings-button');
+        if (settingsButton) {
+            settingsButton.addEventListener('click', () => {
+                this.showModal('settings');
+            });
+        }
     }
 
     /**
@@ -375,9 +402,14 @@ class LexFlowApp {
      * Show modal
      * @param {string} modalName - The modal to show
      */
-    showModal(modalName) {
+    async showModal(modalName) {
         const modal = document.getElementById(`${modalName}-modal`);
         if (modal) {
+            // Load settings before showing settings modal
+            if (modalName === 'settings') {
+                await this.loadSettings();
+            }
+            
             modal.classList.add('active');
             
             // Focus first input
@@ -469,6 +501,9 @@ class LexFlowApp {
             this.saveSettings();
         });
 
+        // Real-time validation for settings form
+        this.initSettingsFormValidation();
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             this.handleKeyboardShortcuts(e);
@@ -508,21 +543,339 @@ class LexFlowApp {
     }
 
     /**
+     * Validate settings form
+     * @returns {Object} - Validation result with isValid flag and errors
+     */
+    validateSettingsForm() {
+        const errors = {};
+        let isValid = true;
+
+        // Get form values
+        const language = document.getElementById('settings-language').value;
+        const country = document.getElementById('settings-country').value;
+        const state = document.getElementById('settings-state').value;
+        const city = document.getElementById('settings-city').value;
+        const corpusUrl = document.getElementById('settings-corpus-url').value;
+        const githubToken = document.getElementById('settings-github-token').value;
+
+        // Clear previous validation states
+        document.querySelectorAll('.form-field').forEach(field => {
+            field.classList.remove('error', 'success');
+        });
+
+        // Validate required fields
+        if (!language) {
+            errors.language = 'Por favor, selecione um idioma';
+            isValid = false;
+        }
+
+        if (!country) {
+            errors.country = 'Por favor, selecione um país';
+            isValid = false;
+        }
+
+        // Validate corpus URL if provided
+        if (corpusUrl && !this.isValidUrl(corpusUrl)) {
+            errors.corpusUrl = 'URL inválida. Use formato: https://exemplo.com';
+            isValid = false;
+        }
+
+        // Validate GitHub token format if provided
+        if (githubToken && !this.isValidGitHubToken(githubToken)) {
+            errors.githubToken = 'Token deve começar com "ghp_" ou "github_pat_"';
+            isValid = false;
+        }
+
+        // Validate state and city (basic length check)
+        if (state && state.length < 2) {
+            errors.state = 'Estado deve ter pelo menos 2 caracteres';
+            isValid = false;
+        }
+
+        if (city && city.length < 2) {
+            errors.city = 'Cidade deve ter pelo menos 2 caracteres';
+            isValid = false;
+        }
+
+        // Apply validation states to form fields
+        Object.keys(errors).forEach(fieldName => {
+            const field = document.getElementById(`settings-${fieldName}`);
+            if (field) {
+                const formField = field.closest('.form-field');
+                if (formField) {
+                    formField.classList.add('error');
+                    const errorMsg = formField.querySelector('.error-message');
+                    if (errorMsg) {
+                        errorMsg.textContent = errors[fieldName];
+                    }
+                }
+            }
+        });
+
+        // Mark valid fields as success
+        ['language', 'country', 'state', 'city', 'corpusUrl', 'githubToken'].forEach(fieldName => {
+            if (!errors[fieldName]) {
+                const field = document.getElementById(`settings-${fieldName === 'corpusUrl' ? 'corpus-url' : fieldName === 'githubToken' ? 'github-token' : fieldName}`);
+                if (field && field.value) {
+                    const formField = field.closest('.form-field');
+                    if (formField) {
+                        formField.classList.add('success');
+                    }
+                }
+            }
+        });
+
+        return { isValid, errors };
+    }
+
+    /**
      * Save application settings
      */
     async saveSettings() {
+        // Validate form first
+        const validation = this.validateSettingsForm();
+        if (!validation.isValid) {
+            this.showToast('Por favor, corrija os erros no formulário', 'error');
+            return;
+        }
+
         const settings = {
             language: document.getElementById('settings-language').value,
+            country: document.getElementById('settings-country').value,
+            state: document.getElementById('settings-state').value,
+            city: document.getElementById('settings-city').value,
+            corpusUrl: document.getElementById('settings-corpus-url').value,
             githubToken: document.getElementById('settings-github-token').value
         };
 
+        // Show loading state
+        const saveBtn = document.getElementById('save-settings-btn');
+        const originalText = saveBtn.textContent;
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Salvando...';
+
         try {
-            localStorage.setItem('lexflow-settings', JSON.stringify(settings));
-            this.showToast('Configurações salvas!', 'success');
+            // Save to IndexedDB using the existing db.js module
+            if (typeof window.setSetting !== 'undefined') {
+                // Use IndexedDB if available
+                await window.setSetting('app-settings', settings);
+            } else {
+                // Fallback to localStorage
+                localStorage.setItem('lexflow-settings', JSON.stringify(settings));
+            }
+            
+            this.showToast('Configurações salvas com sucesso!', 'success');
             this.hideModal('settings');
+            
+            // Update jurisdiction fields in workspace if they're empty
+            this.updateWorkspaceFromSettings(settings);
+            
         } catch (error) {
             console.error('Error saving settings:', error);
             this.showToast('Erro ao salvar configurações', 'error');
+        } finally {
+            // Restore button state
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalText;
+        }
+    }
+
+    /**
+     * Load application settings
+     */
+    async loadSettings() {
+        try {
+            let settings = null;
+            
+            // Try to load from IndexedDB first
+            if (typeof window.getSetting !== 'undefined') {
+                settings = await window.getSetting('app-settings');
+            }
+            
+            // Fallback to localStorage
+            if (!settings) {
+                const saved = localStorage.getItem('lexflow-settings');
+                if (saved) {
+                    settings = JSON.parse(saved);
+                }
+            }
+            
+            if (settings) {
+                // Populate settings form
+                document.getElementById('settings-language').value = settings.language || 'pt-BR';
+                document.getElementById('settings-country').value = settings.country || '';
+                document.getElementById('settings-state').value = settings.state || '';
+                document.getElementById('settings-city').value = settings.city || '';
+                document.getElementById('settings-corpus-url').value = settings.corpusUrl || '';
+                document.getElementById('settings-github-token').value = settings.githubToken || '';
+                
+                return settings;
+            }
+        } catch (error) {
+            console.error('Error loading settings:', error);
+        }
+        
+        return null;
+    }
+
+    /**
+     * Update workspace jurisdiction fields from settings if they're empty
+     * @param {Object} settings - The settings object
+     */
+    updateWorkspaceFromSettings(settings) {
+        // Only update if workspace fields are empty
+        const languageField = document.getElementById('language');
+        const countryField = document.getElementById('country');
+        const stateField = document.getElementById('state');
+        const cityField = document.getElementById('city');
+        const corpusField = document.getElementById('corpus-url');
+        
+        if (languageField && !languageField.value && settings.language) {
+            languageField.value = settings.language;
+        }
+        if (countryField && !countryField.value && settings.country) {
+            countryField.value = settings.country;
+        }
+        if (stateField && !stateField.value && settings.state) {
+            stateField.value = settings.state;
+        }
+        if (cityField && !cityField.value && settings.city) {
+            cityField.value = settings.city;
+        }
+        if (corpusField && !corpusField.value && settings.corpusUrl) {
+            corpusField.value = settings.corpusUrl;
+        }
+    }
+
+    /**
+     * Validate URL format
+     * @param {string} url - URL to validate
+     * @returns {boolean} - True if valid URL
+     */
+    isValidUrl(url) {
+        try {
+            new URL(url);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Validate GitHub token format
+     * @param {string} token - GitHub token to validate
+     * @returns {boolean} - True if valid GitHub token format
+     */
+    isValidGitHubToken(token) {
+        // GitHub tokens start with ghp_ (personal access tokens) or github_pat_ (fine-grained tokens)
+        return token.startsWith('ghp_') || token.startsWith('github_pat_');
+    }
+
+    /**
+     * Initialize real-time validation for settings form
+     */
+    initSettingsFormValidation() {
+        const formFields = [
+            'settings-language',
+            'settings-country', 
+            'settings-state',
+            'settings-city',
+            'settings-corpus-url',
+            'settings-github-token'
+        ];
+
+        formFields.forEach(fieldId => {
+            const field = document.getElementById(fieldId);
+            if (field) {
+                // Validate on blur (when user leaves the field)
+                field.addEventListener('blur', () => {
+                    this.validateSingleField(fieldId);
+                });
+
+                // Clear validation on focus (when user starts typing)
+                field.addEventListener('focus', () => {
+                    const formField = field.closest('.form-field');
+                    if (formField) {
+                        formField.classList.remove('error', 'success');
+                    }
+                });
+            }
+        });
+    }
+
+    /**
+     * Validate a single form field
+     * @param {string} fieldId - The field ID to validate
+     */
+    validateSingleField(fieldId) {
+        const field = document.getElementById(fieldId);
+        if (!field) return;
+
+        const formField = field.closest('.form-field');
+        if (!formField) return;
+
+        const value = field.value.trim();
+        let isValid = true;
+        let errorMessage = '';
+
+        // Clear previous states
+        formField.classList.remove('error', 'success');
+
+        // Validate based on field type
+        switch (fieldId) {
+            case 'settings-language':
+                if (!value) {
+                    isValid = false;
+                    errorMessage = 'Por favor, selecione um idioma';
+                }
+                break;
+
+            case 'settings-country':
+                if (!value) {
+                    isValid = false;
+                    errorMessage = 'Por favor, selecione um país';
+                }
+                break;
+
+            case 'settings-state':
+                if (value && value.length < 2) {
+                    isValid = false;
+                    errorMessage = 'Estado deve ter pelo menos 2 caracteres';
+                }
+                break;
+
+            case 'settings-city':
+                if (value && value.length < 2) {
+                    isValid = false;
+                    errorMessage = 'Cidade deve ter pelo menos 2 caracteres';
+                }
+                break;
+
+            case 'settings-corpus-url':
+                if (value && !this.isValidUrl(value)) {
+                    isValid = false;
+                    errorMessage = 'URL inválida. Use formato: https://exemplo.com';
+                }
+                break;
+
+            case 'settings-github-token':
+                if (value && !this.isValidGitHubToken(value)) {
+                    isValid = false;
+                    errorMessage = 'Token deve começar com "ghp_" ou "github_pat_"';
+                }
+                break;
+        }
+
+        // Apply validation state
+        if (!isValid) {
+            formField.classList.add('error');
+            const errorElement = formField.querySelector('.error-message');
+            if (errorElement) {
+                errorElement.textContent = errorMessage;
+            }
+        } else if (value) {
+            // Only show success for non-empty fields
+            formField.classList.add('success');
         }
     }
 

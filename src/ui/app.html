@@ -308,6 +308,32 @@
             padding: 0;
         }
         
+        /* Form validation styles */
+        .form-field {
+            position: relative;
+        }
+        
+        .form-field.error input,
+        .form-field.error select {
+            border-color: var(--pico-del-color);
+        }
+        
+        .form-field .error-message {
+            color: var(--pico-del-color);
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+            display: none;
+        }
+        
+        .form-field.error .error-message {
+            display: block;
+        }
+        
+        .form-field.success input,
+        .form-field.success select {
+            border-color: var(--pico-ins-color);
+        }
+        
         /* Utility classes */
         .hidden {
             display: none !important;
@@ -353,7 +379,7 @@
                         <div class="feature-icon">📚</div>
                         <div class="feature-title">Workspace Jurídico</div>
                         <div class="feature-description">
-                            Configure jurisdição, pesquise leis e gere análises com IA
+                            Configure jurisdição, pesquise leis e gere análises com IA para pesquisa legal avançada
                         </div>
                     </div>
                     
@@ -361,42 +387,15 @@
                         <div class="feature-icon">📝</div>
                         <div class="feature-title">Coletor & Curadoria</div>
                         <div class="feature-description">
-                            Capture conteúdo legal da web e gere documentos estruturados
+                            Capture conteúdo legal da web e gere documentos estruturados para sua base de conhecimento
                         </div>
                     </div>
                 </div>
                 
-                <div class="text-center">
-                    <button class="nav-tab" data-view="settings">
+                <div class="text-center mt-2">
+                    <button id="settings-button" class="secondary">
                         ⚙️ Configurações
                     </button>
-                </div>
-                
-                <!-- Toast Demo Section -->
-                <div class="card mt-2">
-                    <h4>Demo do Sistema de Notificações</h4>
-                    <div class="grid2">
-                        <button onclick="app.toastSystem.success('Operação realizada com sucesso!')">
-                            Sucesso
-                        </button>
-                        <button onclick="app.toastSystem.error('Erro ao processar solicitação')">
-                            Erro
-                        </button>
-                        <button onclick="app.toastSystem.info('Informação importante')">
-                            Info
-                        </button>
-                        <button onclick="app.toastSystem.warning('Atenção necessária')">
-                            Aviso
-                        </button>
-                    </div>
-                    <div class="mt-1">
-                        <button onclick="app.showAdvancedToastDemo()" class="secondary">
-                            Demo Avançado
-                        </button>
-                        <button onclick="app.toastSystem.clear()" class="secondary">
-                            Limpar Todas
-                        </button>
-                    </div>
                 </div>
             </section>
 
@@ -575,24 +574,61 @@
             </div>
             
             <form id="settings-form">
-                <div class="mb-1">
+                <h4>Configurações da Interface</h4>
+                <div class="form-field mb-1">
                     <label for="settings-language">Idioma da Interface:</label>
-                    <select id="settings-language">
+                    <select id="settings-language" required>
                         <option value="pt-BR">Português (Brasil)</option>
                         <option value="en-US">English (US)</option>
                         <option value="es-ES">Español</option>
                     </select>
+                    <div class="error-message">Por favor, selecione um idioma</div>
                 </div>
                 
-                <div class="mb-1">
+                <h4>Configurações de Jurisdição Padrão</h4>
+                <div class="grid2">
+                    <div class="form-field">
+                        <label for="settings-country">País:</label>
+                        <select id="settings-country" required>
+                            <option value="">Selecione um país</option>
+                            <option value="br">Brasil</option>
+                            <option value="us">Estados Unidos</option>
+                            <option value="es">Espanha</option>
+                        </select>
+                        <div class="error-message">Por favor, selecione um país</div>
+                    </div>
+                    <div class="form-field">
+                        <label for="settings-state">Estado/Província:</label>
+                        <input type="text" id="settings-state" placeholder="ex: Rio Grande do Sul">
+                        <div class="error-message">Estado inválido</div>
+                    </div>
+                </div>
+                
+                <div class="grid2">
+                    <div class="form-field">
+                        <label for="settings-city">Cidade:</label>
+                        <input type="text" id="settings-city" placeholder="ex: Porto Alegre">
+                        <div class="error-message">Cidade inválida</div>
+                    </div>
+                    <div class="form-field">
+                        <label for="settings-corpus-url">URL Base do Corpus:</label>
+                        <input type="url" id="settings-corpus-url" 
+                               placeholder="https://raw.githubusercontent.com/org/legal-corpus/main">
+                        <div class="error-message">URL inválida</div>
+                    </div>
+                </div>
+                
+                <h4>Integração Externa</h4>
+                <div class="form-field mb-1">
                     <label for="settings-github-token">Token do GitHub (opcional):</label>
                     <input type="password" id="settings-github-token" 
                            placeholder="ghp_xxxxxxxxxxxx">
-                    <small class="muted">Para criação automática de issues</small>
+                    <small class="muted">Para criação automática de issues no GitHub</small>
+                    <div class="error-message">Token do GitHub inválido</div>
                 </div>
                 
                 <div class="text-center mt-2">
-                    <button type="submit" class="primary">Salvar Configurações</button>
+                    <button type="submit" class="primary" id="save-settings-btn">Salvar Configurações</button>
                     <button type="button" class="secondary" data-close-modal="settings">Cancelar</button>
                 </div>
             </form>
@@ -603,6 +639,7 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- Scripts -->
+    <script src="../db.js"></script>
     <script src="toast.js"></script>
     <script src="app.js"></script>
 </body>
