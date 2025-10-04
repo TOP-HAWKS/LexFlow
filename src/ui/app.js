@@ -1966,9 +1966,752 @@ ${outputArea.value}
      * Initialize collector view functionality
      */
     initCollectorView() {
-        // Placeholder for collector functionality
         console.log('Collector view initialized');
-        this.updateQueueCount(0);
+        
+        // Initialize collector state
+        this.selectedQueueItem = null;
+        this.queueItems = [];
+        
+        // Load queue items from database
+        this.loadQueueItems();
+        
+        // Set up auto-refresh for queue
+        this.setupQueueAutoRefresh();
+        
+        // Initialize event listeners
+        this.initCollectorEventListeners();
+    }
+
+    /**
+     * Initialize collector event listeners
+     */
+    initCollectorEventListeners() {
+        // Refresh queue button (if exists)
+        const refreshBtn = document.getElementById('refresh-queue');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                this.loadQueueItems();
+            });
+        }
+        
+        // Clear queue button (if exists)
+        const clearBtn = document.getElementById('clear-queue');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                this.clearQueue();
+            });
+        }
+    }
+
+    /**
+     * Setup auto-refresh for queue items
+     */
+    setupQueueAutoRefresh() {
+        // Refresh queue every 30 seconds to catch new captures
+        this.queueRefreshInterval = setInterval(() => {
+            this.loadQueueItems();
+        }, 30000);
+        
+        // Clear interval when leaving collector view
+        const originalShowView = this.showView.bind(this);
+        this.showView = (viewName) => {
+            if (this.currentView === 'collector' && viewName !== 'collector') {
+                if (this.queueRefreshInterval) {
+                    clearInterval(this.queueRefreshInterval);
+                    this.queueRefreshInterval = null;
+                }
+            }
+            return originalShowView(viewName);
+        };
+    }
+
+    /**
+     * Load queue items from database
+     */
+    async loadQueueItems() {
+        try {
+            // Import database functions
+            const { listSubmissions } = await import('../db.js');
+            
+            // Load all submissions (queued, editing, ready)
+            const submissions = await listSubmissions();
+            
+            // Filter out deleted items and sort by timestamp (newest first)
+            this.queueItems = submissions
+                .filter(item => item.status !== 'deleted')
+                .sort((a, b) => b.ts - a.ts);
+            
+            // Update UI
+            this.renderQueueItems();
+            this.updateQueueCount(this.queueItems.length);
+            
+        } catch (error) {
+            console.error('Error loading queue items:', error);
+            this.showToast('Erro ao carregar fila de captura', 'error');
+            this.queueItems = [];
+            this.renderQueueItems();
+            this.updateQueueCount(0);
+        }
+    }
+
+    /**
+     * Render queue items in the UI
+     */
+    renderQueueItems() {
+        const queueContainer = document.getElementById('queue-items');
+        if (!queueContainer) return;
+
+        if (this.queueItems.length === 0) {
+            queueContainer.innerHTML = `
+                <div class="empty-queue">
+                    <p class="muted text-center">Nenhum item na fila</p>
+                    <p class="text-center">
+                        <small>Use o menu de contexto do navegador para capturar conteúdo</small>
+                    </p>
+                </div>
+            `;
+            return;
+        }
+
+        const itemsHtml = this.queueItems.map(item => {
+            const isSelected = this.selectedQueueItem && this.selectedQueueItem.id === item.id;
+            const statusIcon = this.getStatusIcon(item.status);
+            const modeIcon = item.mode === 'full' ? '📄' : '📝';
+            const timeAgo = this.formatTimeAgo(item.ts);
+            
+            // Truncate title and text for preview
+            const title = item.title ? 
+                (item.title.length > 50 ? item.title.substring(0, 50) + '...' : item.title) :
+                'Sem título';
+            
+            const preview = item.selectionText ? 
+                (item.selectionText.length > 100 ? item.selectionText.substring(0, 100) + '...' : item.selectionText) :
+                'Sem conteúdo';
+
+            return `
+                <div class="queue-item ${isSelected ? 'selected' : ''}" 
+                     data-id="${item.id}" onclick="app.selectQueueItem(${item.id})">
+                    <div class="queue-item-header">
+                        <div class="queue-item-icons">
+                            <span class="mode-icon" title="${item.mode === 'full' ? 'Página completa' : 'Seleção'}">${modeIcon}</span>
+                            <span class="status-icon" title="Status: ${item.status}">${statusIcon}</span>
+                        </div>
+                        <div class="queue-item-time">${timeAgo}</div>
+                    </div>
+                    <div class="queue-item-title">${title}</div>
+                    <div class="queue-item-preview">${preview}</div>
+                    <div class="queue-item-url">
+                        <small class="muted">${this.formatUrl(item.url)}</small>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        queueContainer.innerHTML = `
+            <div class="queue-header">
+                <div class="queue-actions">
+                    <button type="button" class="secondary small" onclick="app.loadQueueItems()" title="Atualizar fila">
+                        🔄 Atualizar
+                    </button>
+                    <button type="button" class="secondary small" onclick="app.clearQueue()" title="Limpar fila">
+                        🗑️ Limpar
+                    </button>
+                </div>
+            </div>
+            <div class="queue-list">
+                ${itemsHtml}
+            </div>
+        `;
+
+        // Add queue CSS if not already added
+        this.addQueueCSS();
+    }
+
+    /**
+     * Get status icon for queue item
+     * @param {string} status - Item status
+     * @returns {string} - Status icon
+     */
+    getStatusIcon(status) {
+        const icons = {
+            'queued': '⏳',
+            'editing': '✏️',
+            'ready': '✅',
+            'exported': '📤',
+            'error': '❌'
+        };
+        return icons[status] || '❓';
+    }
+
+    /**
+     * Format time ago string
+     * @param {number} timestamp - Timestamp in milliseconds
+     * @returns {string} - Formatted time ago
+     */
+    formatTimeAgo(timestamp) {
+        const now = Date.now();
+        const diff = now - timestamp;
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (minutes < 1) return 'agora';
+        if (minutes < 60) return `${minutes}m`;
+        if (hours < 24) return `${hours}h`;
+        return `${days}d`;
+    }
+
+    /**
+     * Format URL for display
+     * @param {string} url - Full URL
+     * @returns {string} - Formatted URL
+     */
+    formatUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            return urlObj.hostname + (urlObj.pathname !== '/' ? urlObj.pathname : '');
+        } catch {
+            return url.length > 50 ? url.substring(0, 50) + '...' : url;
+        }
+    }
+
+    /**
+     * Select a queue item for editing
+     * @param {number} itemId - Item ID to select
+     */
+    async selectQueueItem(itemId) {
+        try {
+            // Find item in queue
+            const item = this.queueItems.find(i => i.id === itemId);
+            if (!item) {
+                this.showToast('Item não encontrado', 'error');
+                return;
+            }
+
+            this.selectedQueueItem = item;
+            
+            // Update UI selection
+            document.querySelectorAll('.queue-item').forEach(el => {
+                el.classList.remove('selected');
+            });
+            document.querySelector(`[data-id="${itemId}"]`)?.classList.add('selected');
+            
+            // Load item in editor
+            this.loadItemInEditor(item);
+            
+            // Update item status to editing if it was queued
+            if (item.status === 'queued') {
+                await this.updateItemStatus(itemId, 'editing');
+            }
+            
+        } catch (error) {
+            console.error('Error selecting queue item:', error);
+            this.showToast('Erro ao selecionar item', 'error');
+        }
+    }
+
+    /**
+     * Update item status in database
+     * @param {number} itemId - Item ID
+     * @param {string} status - New status
+     */
+    async updateItemStatus(itemId, status) {
+        try {
+            const { updateSubmission } = await import('../db.js');
+            await updateSubmission(itemId, { status });
+            
+            // Update local item
+            const item = this.queueItems.find(i => i.id === itemId);
+            if (item) {
+                item.status = status;
+            }
+            
+            // Re-render queue to show updated status
+            this.renderQueueItems();
+            
+        } catch (error) {
+            console.error('Error updating item status:', error);
+            this.showToast('Erro ao atualizar status do item', 'error');
+        }
+    }
+
+    /**
+     * Load item in editor panel
+     * @param {Object} item - Queue item to edit
+     */
+    loadItemInEditor(item) {
+        const editorContent = document.getElementById('editor-content');
+        if (!editorContent) return;
+
+        const editorHtml = `
+            <form id="metadata-form" class="metadata-form">
+                <div class="form-field mb-1">
+                    <label for="edit-title">Título:</label>
+                    <input type="text" id="edit-title" value="${item.title || ''}" 
+                           placeholder="Digite o título do documento">
+                </div>
+                
+                <div class="grid2">
+                    <div class="form-field">
+                        <label for="edit-jurisdiction">Jurisdição:</label>
+                        <input type="text" id="edit-jurisdiction" value="${item.jurisdiction || ''}" 
+                               placeholder="ex: Brasil, Rio Grande do Sul">
+                    </div>
+                    <div class="form-field">
+                        <label for="edit-language">Idioma:</label>
+                        <select id="edit-language">
+                            <option value="pt-BR" ${item.lang === 'pt-BR' ? 'selected' : ''}>Português (Brasil)</option>
+                            <option value="en-US" ${item.lang === 'en-US' ? 'selected' : ''}>English (US)</option>
+                            <option value="es-ES" ${item.lang === 'es-ES' ? 'selected' : ''}>Español</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="grid2">
+                    <div class="form-field">
+                        <label for="edit-source-url">URL de Origem:</label>
+                        <input type="url" id="edit-source-url" value="${item.url || ''}" 
+                               placeholder="https://exemplo.com/documento">
+                    </div>
+                    <div class="form-field">
+                        <label for="edit-version-date">Data da Versão:</label>
+                        <input type="date" id="edit-version-date" value="${this.formatDateForInput(item.ts)}">
+                    </div>
+                </div>
+                
+                <div class="form-field mb-1">
+                    <label for="edit-content">Conteúdo:</label>
+                    <textarea id="edit-content" rows="8" placeholder="Conteúdo do documento">${item.selectionText || ''}</textarea>
+                    <small class="muted">
+                        Modo de captura: ${item.mode === 'full' ? 'Página completa' : 'Seleção'} | 
+                        Caracteres: ${(item.selectionText || '').length}
+                    </small>
+                </div>
+                
+                <div class="editor-actions">
+                    <button type="button" class="primary" onclick="app.saveItemChanges()">
+                        💾 Salvar Alterações
+                    </button>
+                    <button type="button" class="secondary" onclick="app.previewMarkdown()">
+                        👁️ Visualizar Markdown
+                    </button>
+                    <button type="button" class="secondary" onclick="app.createGitHubIssue()">
+                        🐙 Criar Issue GitHub
+                    </button>
+                    <button type="button" class="secondary" onclick="app.deleteQueueItem(${item.id})">
+                        🗑️ Excluir Item
+                    </button>
+                </div>
+            </form>
+        `;
+
+        editorContent.innerHTML = editorHtml;
+        
+        // Add form validation
+        this.initEditorValidation();
+    }
+
+    /**
+     * Format date for HTML date input
+     * @param {number} timestamp - Timestamp in milliseconds
+     * @returns {string} - Formatted date string (YYYY-MM-DD)
+     */
+    formatDateForInput(timestamp) {
+        const date = new Date(timestamp);
+        return date.toISOString().split('T')[0];
+    }
+
+    /**
+     * Initialize editor form validation
+     */
+    initEditorValidation() {
+        const form = document.getElementById('metadata-form');
+        if (!form) return;
+
+        // Add real-time validation
+        const fields = ['edit-title', 'edit-jurisdiction', 'edit-source-url', 'edit-content'];
+        
+        fields.forEach(fieldId => {
+            const field = document.getElementById(fieldId);
+            if (field) {
+                field.addEventListener('blur', () => {
+                    this.validateEditorField(fieldId);
+                });
+                
+                field.addEventListener('input', () => {
+                    this.clearEditorFieldValidation(fieldId);
+                });
+            }
+        });
+    }
+
+    /**
+     * Validate editor field
+     * @param {string} fieldId - Field ID to validate
+     */
+    validateEditorField(fieldId) {
+        const field = document.getElementById(fieldId);
+        if (!field) return;
+
+        const value = field.value.trim();
+        let isValid = true;
+        let errorMessage = '';
+
+        // Clear previous validation
+        field.classList.remove('error', 'success');
+        this.clearEditorFieldError(field);
+
+        switch (fieldId) {
+            case 'edit-title':
+                if (!value) {
+                    isValid = false;
+                    errorMessage = 'Título é obrigatório';
+                } else if (value.length < 3) {
+                    isValid = false;
+                    errorMessage = 'Título deve ter pelo menos 3 caracteres';
+                }
+                break;
+
+            case 'edit-jurisdiction':
+                if (value && value.length < 2) {
+                    isValid = false;
+                    errorMessage = 'Jurisdição deve ter pelo menos 2 caracteres';
+                }
+                break;
+
+            case 'edit-source-url':
+                if (value && !this.isValidUrl(value)) {
+                    isValid = false;
+                    errorMessage = 'URL inválida';
+                }
+                break;
+
+            case 'edit-content':
+                if (!value) {
+                    isValid = false;
+                    errorMessage = 'Conteúdo é obrigatório';
+                } else if (value.length < 10) {
+                    isValid = false;
+                    errorMessage = 'Conteúdo deve ter pelo menos 10 caracteres';
+                }
+                break;
+        }
+
+        // Apply validation state
+        if (!isValid) {
+            field.classList.add('error');
+            this.showEditorFieldError(field, errorMessage);
+        } else if (value) {
+            field.classList.add('success');
+        }
+
+        return isValid;
+    }
+
+    /**
+     * Clear editor field validation
+     * @param {string} fieldId - Field ID to clear
+     */
+    clearEditorFieldValidation(fieldId) {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.classList.remove('error', 'success');
+            this.clearEditorFieldError(field);
+        }
+    }
+
+    /**
+     * Show editor field error
+     * @param {HTMLElement} field - Field element
+     * @param {string} message - Error message
+     */
+    showEditorFieldError(field, message) {
+        this.clearEditorFieldError(field);
+        
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'editor-field-error';
+        errorDiv.style.color = 'var(--pico-del-color)';
+        errorDiv.style.fontSize = '0.8rem';
+        errorDiv.style.marginTop = '0.25rem';
+        errorDiv.textContent = message;
+        
+        field.parentNode.appendChild(errorDiv);
+    }
+
+    /**
+     * Clear editor field error
+     * @param {HTMLElement} field - Field element
+     */
+    clearEditorFieldError(field) {
+        const existing = field.parentNode.querySelectorAll('.editor-field-error');
+        existing.forEach(el => el.remove());
+    }
+
+    /**
+     * Save changes to the selected item
+     */
+    async saveItemChanges() {
+        if (!this.selectedQueueItem) {
+            this.showToast('Nenhum item selecionado', 'error');
+            return;
+        }
+
+        // Validate form
+        const fields = ['edit-title', 'edit-jurisdiction', 'edit-source-url', 'edit-content'];
+        let isValid = true;
+        
+        fields.forEach(fieldId => {
+            if (!this.validateEditorField(fieldId)) {
+                isValid = false;
+            }
+        });
+
+        if (!isValid) {
+            this.showToast('Por favor, corrija os erros no formulário', 'error');
+            return;
+        }
+
+        try {
+            // Get form data
+            const formData = {
+                title: document.getElementById('edit-title').value.trim(),
+                jurisdiction: document.getElementById('edit-jurisdiction').value.trim(),
+                lang: document.getElementById('edit-language').value,
+                url: document.getElementById('edit-source-url').value.trim(),
+                versionDate: document.getElementById('edit-version-date').value,
+                selectionText: document.getElementById('edit-content').value.trim(),
+                status: 'ready' // Mark as ready after editing
+            };
+
+            // Update in database
+            const { updateSubmission } = await import('../db.js');
+            await updateSubmission(this.selectedQueueItem.id, formData);
+
+            // Update local item
+            Object.assign(this.selectedQueueItem, formData);
+
+            // Refresh queue display
+            this.renderQueueItems();
+
+            this.showToast('Alterações salvas com sucesso!', 'success');
+
+        } catch (error) {
+            console.error('Error saving item changes:', error);
+            this.showToast('Erro ao salvar alterações', 'error');
+        }
+    }
+
+    /**
+     * Delete a queue item
+     * @param {number} itemId - Item ID to delete
+     */
+    async deleteQueueItem(itemId) {
+        if (!confirm('Tem certeza que deseja excluir este item?')) {
+            return;
+        }
+
+        try {
+            // Note: We need to add a delete function to db.js
+            // For now, we'll update status to 'deleted'
+            const { updateSubmission } = await import('../db.js');
+            await updateSubmission(itemId, { status: 'deleted' });
+
+            // Remove from local array
+            this.queueItems = this.queueItems.filter(item => item.id !== itemId);
+
+            // Clear editor if this item was selected
+            if (this.selectedQueueItem && this.selectedQueueItem.id === itemId) {
+                this.selectedQueueItem = null;
+                document.getElementById('editor-content').innerHTML = 
+                    '<p class="muted text-center">Selecione um item da fila para editar</p>';
+            }
+
+            // Refresh display
+            this.renderQueueItems();
+            this.updateQueueCount(this.queueItems.length);
+
+            this.showToast('Item excluído com sucesso', 'success');
+
+        } catch (error) {
+            console.error('Error deleting item:', error);
+            this.showToast('Erro ao excluir item', 'error');
+        }
+    }
+
+    /**
+     * Clear entire queue
+     */
+    async clearQueue() {
+        if (!confirm('Tem certeza que deseja limpar toda a fila? Esta ação não pode ser desfeita.')) {
+            return;
+        }
+
+        try {
+            // Mark all items as deleted
+            const { updateSubmission } = await import('../db.js');
+            
+            for (const item of this.queueItems) {
+                await updateSubmission(item.id, { status: 'deleted' });
+            }
+
+            // Clear local state
+            this.queueItems = [];
+            this.selectedQueueItem = null;
+
+            // Update UI
+            this.renderQueueItems();
+            this.updateQueueCount(0);
+            document.getElementById('editor-content').innerHTML = 
+                '<p class="muted text-center">Selecione um item da fila para editar</p>';
+
+            this.showToast('Fila limpa com sucesso', 'success');
+
+        } catch (error) {
+            console.error('Error clearing queue:', error);
+            this.showToast('Erro ao limpar fila', 'error');
+        }
+    }
+
+    /**
+     * Add CSS styles for queue interface
+     */
+    addQueueCSS() {
+        if (document.getElementById('queue-css')) return;
+
+        const style = document.createElement('style');
+        style.id = 'queue-css';
+        style.textContent = `
+            .empty-queue {
+                padding: 2rem;
+                text-align: center;
+                border: 2px dashed var(--pico-muted-border-color);
+                border-radius: var(--pico-border-radius);
+                margin: 1rem 0;
+            }
+            
+            .queue-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 1rem;
+                padding-bottom: 0.5rem;
+                border-bottom: 1px solid var(--pico-muted-border-color);
+            }
+            
+            .queue-actions {
+                display: flex;
+                gap: 0.5rem;
+            }
+            
+            .queue-actions .small {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.8rem;
+            }
+            
+            .queue-list {
+                max-height: 400px;
+                overflow-y: auto;
+            }
+            
+            .queue-item {
+                padding: 0.75rem;
+                border: 1px solid var(--pico-muted-border-color);
+                border-radius: var(--pico-border-radius);
+                margin-bottom: 0.5rem;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                background: var(--pico-card-background-color);
+            }
+            
+            .queue-item:hover {
+                border-color: var(--pico-primary-color);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            
+            .queue-item.selected {
+                border-color: var(--pico-primary-color);
+                background: var(--pico-primary-background);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            }
+            
+            .queue-item-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 0.5rem;
+            }
+            
+            .queue-item-icons {
+                display: flex;
+                gap: 0.25rem;
+            }
+            
+            .mode-icon, .status-icon {
+                font-size: 0.9rem;
+            }
+            
+            .queue-item-time {
+                font-size: 0.8rem;
+                color: var(--pico-muted-color);
+            }
+            
+            .queue-item-title {
+                font-weight: bold;
+                margin-bottom: 0.25rem;
+                color: var(--pico-color);
+            }
+            
+            .queue-item-preview {
+                font-size: 0.9rem;
+                color: var(--pico-muted-color);
+                line-height: 1.3;
+                margin-bottom: 0.25rem;
+            }
+            
+            .queue-item-url {
+                font-size: 0.8rem;
+            }
+            
+            .metadata-form .form-field {
+                position: relative;
+            }
+            
+            .metadata-form .form-field.error input,
+            .metadata-form .form-field.error select,
+            .metadata-form .form-field.error textarea {
+                border-color: var(--pico-del-color);
+            }
+            
+            .metadata-form .form-field.success input,
+            .metadata-form .form-field.success select,
+            .metadata-form .form-field.success textarea {
+                border-color: var(--pico-ins-color);
+            }
+            
+            .editor-actions {
+                display: flex;
+                gap: 0.5rem;
+                flex-wrap: wrap;
+                margin-top: 1rem;
+            }
+            
+            .editor-actions button {
+                flex: 1;
+                min-width: 120px;
+            }
+            
+            @media (max-width: 600px) {
+                .editor-actions {
+                    flex-direction: column;
+                }
+                
+                .editor-actions button {
+                    width: 100%;
+                }
+            }
+        `;
+        
+        document.head.appendChild(style);
     }
 
     /**
@@ -2515,12 +3258,677 @@ ${outputArea.value}
             }, 'success', 5000);
         }, 3000);
     }
+    /**
+     * Preview markdown for the selected item
+     */
+    async previewMarkdown() {
+        if (!this.selectedQueueItem) {
+            this.showToast('Nenhum item selecionado', 'error');
+            return;
+        }
+
+        // Validate form first
+        const fields = ['edit-title', 'edit-content'];
+        let isValid = true;
+        
+        fields.forEach(fieldId => {
+            if (!this.validateEditorField(fieldId)) {
+                isValid = false;
+            }
+        });
+
+        if (!isValid) {
+            this.showToast('Por favor, corrija os erros obrigatórios no formulário', 'error');
+            return;
+        }
+
+        try {
+            // Get current form data
+            const formData = {
+                title: document.getElementById('edit-title').value.trim(),
+                jurisdiction: document.getElementById('edit-jurisdiction').value.trim(),
+                lang: document.getElementById('edit-language').value,
+                url: document.getElementById('edit-source-url').value.trim(),
+                versionDate: document.getElementById('edit-version-date').value,
+                content: document.getElementById('edit-content').value.trim()
+            };
+
+            // Generate markdown using md-builder utility
+            const { buildMarkdown } = await import('../util/md-builder.js');
+            
+            const markdownData = {
+                title: formData.title,
+                jurisdiction: formData.jurisdiction,
+                language: formData.lang,
+                sourceUrl: formData.url,
+                versionDate: formData.versionDate || new Date().toISOString().split('T')[0],
+                content: formData.content
+            };
+
+            const markdown = buildMarkdown(markdownData);
+            
+            // Show markdown preview modal
+            this.showMarkdownPreview(markdown, formData);
+
+        } catch (error) {
+            console.error('Error generating markdown preview:', error);
+            this.showToast('Erro ao gerar preview do markdown', 'error');
+        }
+    }
+
+    /**
+     * Show markdown preview modal
+     * @param {string} markdown - Generated markdown content
+     * @param {Object} formData - Form data used to generate markdown
+     */
+    showMarkdownPreview(markdown, formData) {
+        // Create modal if it doesn't exist
+        if (!document.getElementById('markdown-preview-modal')) {
+            const modalHtml = `
+                <div id="markdown-preview-modal" class="modal-overlay">
+                    <div class="modal" style="max-width: 800px; width: 95%;">
+                        <div class="modal-header">
+                            <h3>Preview do Markdown</h3>
+                            <button class="modal-close" onclick="app.hideModal('markdown-preview')">&times;</button>
+                        </div>
+                        <div id="markdown-preview-content"></div>
+                        <div class="modal-actions">
+                            <button type="button" class="primary" onclick="app.copyMarkdownToClipboard()">
+                                📋 Copiar Markdown
+                            </button>
+                            <button type="button" class="secondary" onclick="app.downloadMarkdown()">
+                                💾 Baixar Arquivo
+                            </button>
+                            <button type="button" class="secondary" onclick="app.hideModal('markdown-preview')">
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        // Update content
+        const content = document.getElementById('markdown-preview-content');
+        content.innerHTML = `
+            <div class="markdown-preview">
+                <h4>Arquivo: ${formData.title.toLowerCase().replace(/\s+/g, '-')}.md</h4>
+                <pre><code>${this.escapeHtml(markdown)}</code></pre>
+            </div>
+        `;
+
+        // Store markdown for copying/downloading
+        this.currentMarkdown = markdown;
+        this.currentMarkdownFilename = `${formData.title.toLowerCase().replace(/\s+/g, '-')}.md`;
+
+        // Show modal
+        this.showModal('markdown-preview');
+
+        // Add CSS for markdown preview
+        this.addMarkdownPreviewCSS();
+    }
+
+    /**
+     * Copy markdown to clipboard
+     */
+    async copyMarkdownToClipboard() {
+        if (!this.currentMarkdown) {
+            this.showToast('Nenhum markdown para copiar', 'error');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(this.currentMarkdown);
+            this.showToast('Markdown copiado para a área de transferência!', 'success');
+        } catch (error) {
+            console.error('Error copying to clipboard:', error);
+            
+            // Fallback: create temporary textarea
+            const textarea = document.createElement('textarea');
+            textarea.value = this.currentMarkdown;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            
+            this.showToast('Markdown copiado para a área de transferência!', 'success');
+        }
+    }
+
+    /**
+     * Download markdown as file
+     */
+    downloadMarkdown() {
+        if (!this.currentMarkdown) {
+            this.showToast('Nenhum markdown para baixar', 'error');
+            return;
+        }
+
+        try {
+            const blob = new Blob([this.currentMarkdown], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = this.currentMarkdownFilename || 'documento.md';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            URL.revokeObjectURL(url);
+            
+            this.showToast('Arquivo markdown baixado!', 'success');
+        } catch (error) {
+            console.error('Error downloading markdown:', error);
+            this.showToast('Erro ao baixar arquivo', 'error');
+        }
+    }
+
+    /**
+     * Escape HTML characters for display
+     * @param {string} text - Text to escape
+     * @returns {string} - Escaped text
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    /**
+     * Add CSS for markdown preview modal
+     */
+    addMarkdownPreviewCSS() {
+        if (document.getElementById('markdown-preview-css')) return;
+
+        const style = document.createElement('style');
+        style.id = 'markdown-preview-css';
+        style.textContent = `
+            .markdown-preview {
+                max-height: 60vh;
+                overflow-y: auto;
+                border: 1px solid var(--pico-muted-border-color);
+                border-radius: var(--pico-border-radius);
+                padding: 1rem;
+                background: var(--pico-card-background-color);
+            }
+            
+            .markdown-preview h4 {
+                margin-top: 0;
+                margin-bottom: 1rem;
+                color: var(--pico-primary-color);
+                font-family: monospace;
+            }
+            
+            .markdown-preview pre {
+                margin: 0;
+                padding: 1rem;
+                background: var(--pico-code-background-color);
+                border-radius: var(--pico-border-radius);
+                overflow-x: auto;
+                font-size: 0.9rem;
+                line-height: 1.4;
+            }
+            
+            .markdown-preview code {
+                background: transparent;
+                padding: 0;
+                font-family: 'Courier New', Consolas, monospace;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+            
+            .modal-actions {
+                display: flex;
+                gap: 0.5rem;
+                justify-content: flex-end;
+                margin-top: 1rem;
+                padding-top: 1rem;
+                border-top: 1px solid var(--pico-muted-border-color);
+            }
+            
+            .modal-actions button {
+                min-width: 120px;
+            }
+            
+            @media (max-width: 600px) {
+                .modal-actions {
+                    flex-direction: column;
+                }
+                
+                .modal-actions button {
+                    width: 100%;
+                }
+            }
+        `;
+        
+        document.head.appendChild(style);
+    } 
+   /**
+     * Create GitHub issue with markdown content
+     */
+    async createGitHubIssue() {
+        if (!this.selectedQueueItem) {
+            this.showToast('Nenhum item selecionado', 'error');
+            return;
+        }
+
+        // Validate form first
+        const fields = ['edit-title', 'edit-content'];
+        let isValid = true;
+        
+        fields.forEach(fieldId => {
+            if (!this.validateEditorField(fieldId)) {
+                isValid = false;
+            }
+        });
+
+        if (!isValid) {
+            this.showToast('Por favor, corrija os erros obrigatórios no formulário', 'error');
+            return;
+        }
+
+        try {
+            // Get GitHub settings
+            const githubToken = await this.getGitHubToken();
+            const githubRepo = await this.getGitHubRepo();
+            
+            if (!githubToken || !githubRepo) {
+                this.showGitHubConfigModal();
+                return;
+            }
+
+            // Get current form data
+            const formData = {
+                title: document.getElementById('edit-title').value.trim(),
+                jurisdiction: document.getElementById('edit-jurisdiction').value.trim(),
+                lang: document.getElementById('edit-language').value,
+                url: document.getElementById('edit-source-url').value.trim(),
+                versionDate: document.getElementById('edit-version-date').value,
+                content: document.getElementById('edit-content').value.trim()
+            };
+
+            // Generate markdown
+            const { buildMarkdown } = await import('../util/md-builder.js');
+            
+            const markdownData = {
+                title: formData.title,
+                jurisdiction: formData.jurisdiction,
+                language: formData.lang,
+                sourceUrl: formData.url,
+                versionDate: formData.versionDate || new Date().toISOString().split('T')[0],
+                content: formData.content
+            };
+
+            const markdown = buildMarkdown(markdownData);
+            
+            // Create GitHub issue
+            await this.submitToGitHub(githubToken, githubRepo, formData, markdown);
+
+        } catch (error) {
+            console.error('Error creating GitHub issue:', error);
+            this.showToast('Erro ao criar issue no GitHub', 'error');
+        }
+    }
+
+    /**
+     * Get GitHub token from settings
+     * @returns {string|null} - GitHub token or null
+     */
+    async getGitHubToken() {
+        try {
+            if (typeof window.getSetting !== 'undefined') {
+                return await window.getSetting('github-token');
+            } else {
+                const settings = localStorage.getItem('lexflow-settings');
+                if (settings) {
+                    const parsed = JSON.parse(settings);
+                    return parsed.githubToken;
+                }
+            }
+        } catch (error) {
+            console.error('Error getting GitHub token:', error);
+        }
+        return null;
+    }
+
+    /**
+     * Get GitHub repository from settings
+     * @returns {string|null} - GitHub repository or null
+     */
+    async getGitHubRepo() {
+        try {
+            if (typeof window.getSetting !== 'undefined') {
+                return await window.getSetting('github-repo');
+            } else {
+                const settings = localStorage.getItem('lexflow-settings');
+                if (settings) {
+                    const parsed = JSON.parse(settings);
+                    return parsed.githubRepo;
+                }
+            }
+        } catch (error) {
+            console.error('Error getting GitHub repo:', error);
+        }
+        return null;
+    }
+
+    /**
+     * Show GitHub configuration modal
+     */
+    showGitHubConfigModal() {
+        // Create modal if it doesn't exist
+        if (!document.getElementById('github-config-modal')) {
+            const modalHtml = `
+                <div id="github-config-modal" class="modal-overlay">
+                    <div class="modal">
+                        <div class="modal-header">
+                            <h3>Configuração do GitHub</h3>
+                            <button class="modal-close" onclick="app.hideModal('github-config')">&times;</button>
+                        </div>
+                        <div class="modal-content">
+                            <p>Para criar issues no GitHub, você precisa configurar:</p>
+                            
+                            <form id="github-config-form">
+                                <div class="form-field mb-1">
+                                    <label for="github-token-input">Token do GitHub:</label>
+                                    <input type="password" id="github-token-input" 
+                                           placeholder="ghp_xxxxxxxxxxxx">
+                                    <small class="muted">
+                                        <a href="https://github.com/settings/tokens" target="_blank">
+                                            Criar token no GitHub
+                                        </a> (permissões: repo, issues)
+                                    </small>
+                                </div>
+                                
+                                <div class="form-field mb-1">
+                                    <label for="github-repo-input">Repositório:</label>
+                                    <input type="text" id="github-repo-input" 
+                                           placeholder="usuario/repositorio">
+                                    <small class="muted">
+                                        Formato: usuario/nome-do-repositorio
+                                    </small>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="primary" onclick="app.saveGitHubConfig()">
+                                Salvar e Continuar
+                            </button>
+                            <button type="button" class="secondary" onclick="app.hideModal('github-config')">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        // Load current settings
+        this.loadGitHubConfigForm();
+
+        // Show modal
+        this.showModal('github-config');
+    }
+
+    /**
+     * Load GitHub configuration into form
+     */
+    async loadGitHubConfigForm() {
+        const tokenInput = document.getElementById('github-token-input');
+        const repoInput = document.getElementById('github-repo-input');
+        
+        if (tokenInput && repoInput) {
+            const token = await this.getGitHubToken();
+            const repo = await this.getGitHubRepo();
+            
+            if (token) tokenInput.value = token;
+            if (repo) repoInput.value = repo;
+        }
+    }
+
+    /**
+     * Save GitHub configuration
+     */
+    async saveGitHubConfig() {
+        const token = document.getElementById('github-token-input').value.trim();
+        const repo = document.getElementById('github-repo-input').value.trim();
+
+        if (!token || !repo) {
+            this.showToast('Por favor, preencha todos os campos', 'error');
+            return;
+        }
+
+        // Validate repository format
+        if (!repo.includes('/') || repo.split('/').length !== 2) {
+            this.showToast('Formato do repositório inválido. Use: usuario/repositorio', 'error');
+            return;
+        }
+
+        try {
+            // Save settings
+            if (typeof window.setSetting !== 'undefined') {
+                await window.setSetting('github-token', token);
+                await window.setSetting('github-repo', repo);
+            } else {
+                const settings = {
+                    githubToken: token,
+                    githubRepo: repo
+                };
+                localStorage.setItem('lexflow-settings', JSON.stringify(settings));
+            }
+
+            this.showToast('Configuração do GitHub salva!', 'success');
+            this.hideModal('github-config');
+
+            // Try to create issue again
+            setTimeout(() => {
+                this.createGitHubIssue();
+            }, 1000);
+
+        } catch (error) {
+            console.error('Error saving GitHub config:', error);
+            this.showToast('Erro ao salvar configuração', 'error');
+        }
+    }
+
+    /**
+     * Submit content to GitHub as an issue
+     * @param {string} token - GitHub token
+     * @param {string} repo - Repository name (user/repo)
+     * @param {Object} formData - Form data
+     * @param {string} markdown - Generated markdown content
+     */
+    async submitToGitHub(token, repo, formData, markdown) {
+        try {
+            // Prepare issue data
+            const issueTitle = `[LexFlow] ${formData.title}`;
+            const issueBody = this.buildGitHubIssueBody(formData, markdown);
+            
+            // GitHub API request
+            const response = await fetch(`https://api.github.com/repos/${repo}/issues`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `token ${token}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                body: JSON.stringify({
+                    title: issueTitle,
+                    body: issueBody,
+                    labels: ['lexflow', 'legal-content', formData.lang || 'pt-BR']
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`GitHub API error: ${errorData.message || response.statusText}`);
+            }
+
+            const issueData = await response.json();
+            
+            // Update item status to exported
+            await this.updateItemStatus(this.selectedQueueItem.id, 'exported');
+            
+            // Show success message with link
+            this.showGitHubSuccessModal(issueData.html_url, issueData.number);
+
+        } catch (error) {
+            console.error('Error submitting to GitHub:', error);
+            
+            let errorMessage = 'Erro ao criar issue no GitHub';
+            if (error.message.includes('401')) {
+                errorMessage = 'Token do GitHub inválido ou expirado';
+            } else if (error.message.includes('404')) {
+                errorMessage = 'Repositório não encontrado ou sem permissão';
+            } else if (error.message.includes('422')) {
+                errorMessage = 'Dados inválidos para criação da issue';
+            }
+            
+            this.showToast(errorMessage, 'error');
+        }
+    }
+
+    /**
+     * Build GitHub issue body
+     * @param {Object} formData - Form data
+     * @param {string} markdown - Generated markdown
+     * @returns {string} - Issue body
+     */
+    buildGitHubIssueBody(formData, markdown) {
+        const metadata = [
+            `**Jurisdição:** ${formData.jurisdiction || 'Não especificada'}`,
+            `**Idioma:** ${formData.lang || 'pt-BR'}`,
+            `**URL de Origem:** ${formData.url || 'Não especificada'}`,
+            `**Data da Versão:** ${formData.versionDate || 'Não especificada'}`,
+            `**Capturado em:** ${new Date().toLocaleString('pt-BR')}`
+        ].join('\n');
+
+        return `
+## Conteúdo Legal Capturado via LexFlow
+
+${metadata}
+
+---
+
+### Arquivo Markdown Proposto
+
+\`\`\`markdown
+${markdown}
+\`\`\`
+
+---
+
+*Esta issue foi criada automaticamente pela extensão LexFlow para submissão de conteúdo legal.*
+        `.trim();
+    }
+
+    /**
+     * Show GitHub success modal
+     * @param {string} issueUrl - GitHub issue URL
+     * @param {number} issueNumber - Issue number
+     */
+    showGitHubSuccessModal(issueUrl, issueNumber) {
+        // Create modal if it doesn't exist
+        if (!document.getElementById('github-success-modal')) {
+            const modalHtml = `
+                <div id="github-success-modal" class="modal-overlay">
+                    <div class="modal">
+                        <div class="modal-header">
+                            <h3>✅ Issue Criada com Sucesso!</h3>
+                            <button class="modal-close" onclick="app.hideModal('github-success')">&times;</button>
+                        </div>
+                        <div id="github-success-content"></div>
+                        <div class="modal-actions">
+                            <button type="button" class="primary" id="open-github-issue">
+                                🔗 Abrir Issue no GitHub
+                            </button>
+                            <button type="button" class="secondary" onclick="app.hideModal('github-success')">
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        // Update content
+        const content = document.getElementById('github-success-content');
+        content.innerHTML = `
+            <div class="success-message">
+                <p>O conteúdo foi enviado com sucesso para o GitHub!</p>
+                <div class="issue-info">
+                    <strong>Issue #${issueNumber}</strong><br>
+                    <code>${issueUrl}</code>
+                </div>
+                <p class="muted">
+                    O item foi marcado como "exportado" na fila de captura.
+                </p>
+            </div>
+        `;
+
+        // Update button action
+        const openButton = document.getElementById('open-github-issue');
+        if (openButton) {
+            openButton.onclick = () => {
+                window.open(issueUrl, '_blank');
+                this.hideModal('github-success');
+            };
+        }
+
+        // Show modal
+        this.showModal('github-success');
+
+        // Add success CSS
+        this.addGitHubSuccessCSS();
+    }
+
+    /**
+     * Add CSS for GitHub success modal
+     */
+    addGitHubSuccessCSS() {
+        if (document.getElementById('github-success-css')) return;
+
+        const style = document.createElement('style');
+        style.id = 'github-success-css';
+        style.textContent = `
+            .success-message {
+                text-align: center;
+                padding: 1rem;
+            }
+            
+            .issue-info {
+                background: var(--pico-card-background-color);
+                border: 1px solid var(--pico-primary-color);
+                border-radius: var(--pico-border-radius);
+                padding: 1rem;
+                margin: 1rem 0;
+                font-family: monospace;
+            }
+            
+            .issue-info strong {
+                color: var(--pico-primary-color);
+                font-size: 1.1rem;
+            }
+            
+            .issue-info code {
+                background: transparent;
+                color: var(--pico-muted-color);
+                font-size: 0.9rem;
+                word-break: break-all;
+            }
+        `;
+        
+        document.head.appendChild(style);
+    }
 }
 
-// Initialize the application when DOM is loaded
-let app;
+// Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    app = new LexFlowApp();
+    window.app = new LexFlowApp();
 });
 
 // Export for global access

@@ -4,7 +4,7 @@
   "version": "0.2.0",
   "description": "Review & summarize legal texts using Chrome built-in AI. Select jurisdiction, pick statutes (Markdown), craft prompts, get structured outputs. Capture snippets from the web into a curation queue and generate Markdown for a public repo.",
   "action": {
-    "default_popup": "src/ui/jurisdiction.html"
+    "default_popup": "src/ui/app.html"
   },
   "background": {
     "service_worker": "src/sw.js",
@@ -19,7 +19,8 @@
     "storage",
     "contextMenus",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "notifications"
   ],
   "host_permissions": [
     "<all_urls>",
