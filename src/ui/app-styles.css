@@ -910,4 +910,241 @@ button.outline:hover:not(:disabled) {
     .banner-close:hover {
         transform: none;
     }
+}/* Chro
+me AI Setup Banner Styles */
+.chrome-ai-banner {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    border-radius: var(--pico-border-radius);
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+    animation: slideIn 0.3s ease-out;
+}
+
+.info-banner {
+    background: linear-gradient(135deg, var(--pico-primary-color), var(--pico-primary-hover));
+}
+
+/* Configuration Error Banner Styles */
+.configuration-error-banner {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    color: white;
+    border-radius: var(--pico-border-radius);
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
+    animation: slideIn 0.3s ease-out;
+}
+
+.error-banner {
+    background: linear-gradient(135deg, var(--pico-del-color), #b91c1c);
+}
+
+/* Enhanced Toast Styles with Action Buttons */
+.toast.warning {
+    background: var(--pico-color-amber-500);
+}
+
+.toast-with-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-width: 300px;
+}
+
+.toast-action {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 0.4rem 0.8rem;
+    border-radius: calc(var(--pico-border-radius) * 0.75);
+    font-size: 0.8rem;
+    font-weight: var(--pico-font-weight-bold);
+    cursor: pointer;
+    transition: var(--pico-transition);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.toast-action:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-1px);
+}
+
+.toast-action:focus {
+    outline: 2px solid white;
+    outline-offset: 2px;
+}
+
+/* Integration Status Indicators */
+.integration-status {
+    background: var(--pico-card-background-color);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.status-item:last-child {
+    margin-bottom: 0;
+}
+
+.status-icon {
+    font-size: 1rem;
+    width: 20px;
+    text-align: center;
+}
+
+.status-icon.success {
+    color: var(--pico-ins-color);
+}
+
+.status-icon.warning {
+    color: var(--pico-color-amber-500);
+}
+
+.status-icon.error {
+    color: var(--pico-del-color);
+}
+
+.status-text {
+    flex: 1;
+    font-size: 0.9rem;
+}
+
+.status-help {
+    color: var(--pico-primary-color);
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-weight: var(--pico-font-weight-bold);
+    padding: 0.2rem 0.5rem;
+    border-radius: calc(var(--pico-border-radius) * 0.5);
+    transition: var(--pico-transition);
+}
+
+.status-help:hover {
+    background: var(--pico-primary-background);
+    text-decoration: underline;
+}
+
+.status-help:focus {
+    outline: 2px solid var(--pico-primary-color);
+    outline-offset: 2px;
+}
+
+/* Enhanced Loading States */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    border-radius: var(--pico-border-radius);
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--pico-muted-border-color);
+    border-top: 3px solid var(--pico-primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.loading-text {
+    margin-top: 1rem;
+    color: var(--pico-muted-color);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+/* Dark mode adjustments for new elements */
+@media (prefers-color-scheme: dark) {
+    .chrome-ai-banner {
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+    
+    .configuration-error-banner {
+        box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+    }
+    
+    .loading-overlay {
+        background: rgba(0, 0, 0, 0.8);
+    }
+    
+    .integration-status {
+        background: var(--pico-card-background-color);
+        border-color: var(--pico-muted-border-color);
+    }
+}
+
+/* High contrast mode support for new elements */
+@media (prefers-contrast: high) {
+    .chrome-ai-banner,
+    .configuration-error-banner {
+        border: 2px solid currentColor;
+    }
+    
+    .integration-status {
+        border-width: 2px;
+    }
+    
+    .toast-action {
+        border-width: 2px;
+    }
+}
+
+/* Reduced motion support for new elements */
+@media (prefers-reduced-motion: reduce) {
+    .chrome-ai-banner,
+    .configuration-error-banner {
+        animation: none;
+    }
+    
+    .loading-spinner {
+        animation: none;
+        border-top-color: var(--pico-primary-color);
+    }
+    
+    .toast-action:hover {
+        transform: none;
+    }
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 600px) {
+    .banner-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    
+    .banner-action {
+        align-self: stretch;
+        text-align: center;
+    }
+    
+    .toast-with-action {
+        flex-direction: column;
+        align-items: stretch;
+        min-width: 250px;
+    }
+    
+    .toast-action {
+        margin-top: 0.5rem;
+        text-align: center;
+    }
 }

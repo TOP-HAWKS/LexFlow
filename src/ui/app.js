@@ -409,12 +409,32 @@ class LexFlowApp {
     }
 
     /**
-     * Show user-friendly error message
+     * Show user-friendly error message with enhanced configuration-specific handling
      * @param {Object} errorInfo - Categorized error information
      */
     showErrorToUser(errorInfo) {
         const message = `${errorInfo.userMessage}. ${errorInfo.suggestion}`;
         const duration = errorInfo.severity === 'high' ? 8000 : 5000;
+
+        // Log the error for workspace state tracking
+        this.logWorkspaceState('error_shown', {
+            errorType: errorInfo.type,
+            severity: errorInfo.severity,
+            recoverable: errorInfo.recoverable,
+            retryable: errorInfo.retryable
+        });
+
+        // Enhanced configuration-specific error handling
+        if (errorInfo.type === 'serverless_config' || errorInfo.type === 'serverless_validation') {
+            // Show persistent banner for configuration errors
+            this.showConfigurationErrorBanner(errorInfo);
+        } else if (errorInfo.type === 'ai' && !this.chromeAIAvailable) {
+            // Show AI setup banner for AI-related errors
+            this.showChromeAISetupBanner();
+        } else if (errorInfo.type === 'network' && !this.isOnline) {
+            // Handle offline mode with fallback options
+            this.handleOfflineFallback('error_recovery');
+        }
 
         // Create enhanced toast with help action if available
         if (errorInfo.helpAction) {
@@ -427,6 +447,78 @@ class LexFlowApp {
             );
         } else {
             this.showToast(message, 'error', duration);
+        }
+    }
+
+    /**
+     * Show configuration error banner for persistent configuration issues
+     * @param {Object} errorInfo - Error information object
+     */
+    showConfigurationErrorBanner(errorInfo) {
+        // Remove any existing configuration error banner
+        this.removeConfigurationErrorBanner();
+        
+        // Create banner element
+        const banner = document.createElement('div');
+        banner.id = 'configuration-error-banner';
+        banner.className = 'configuration-error-banner error-banner';
+        banner.setAttribute('role', 'alert');
+        banner.setAttribute('aria-live', 'assertive');
+        
+        let actionText = 'Configurar';
+        let actionCallback = () => this.navigate('settings');
+        
+        if (errorInfo.type === 'serverless_validation') {
+            actionText = 'Corrigir URL';
+        }
+        
+        banner.innerHTML = `
+            <div class="banner-content">
+                <div class="banner-icon">❌</div>
+                <div class="banner-message">
+                    <strong>${errorInfo.userMessage}</strong><br>
+                    ${errorInfo.suggestion}
+                </div>
+                <button class="banner-action" id="config-error-action-btn">
+                    ${actionText}
+                </button>
+                <button class="banner-close" id="close-config-error-banner" aria-label="Fechar aviso">
+                    ×
+                </button>
+            </div>
+        `;
+        
+        // Insert banner at the top of current view
+        const currentView = document.querySelector(`#${this.currentView}-view`);
+        if (currentView) {
+            currentView.insertBefore(banner, currentView.firstChild);
+        }
+        
+        // Add event listeners
+        const actionBtn = banner.querySelector('#config-error-action-btn');
+        const closeBtn = banner.querySelector('#close-config-error-banner');
+        
+        if (actionBtn) {
+            actionBtn.addEventListener('click', actionCallback);
+        }
+        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                this.removeConfigurationErrorBanner();
+            });
+        }
+        
+        console.log('Configuration error banner shown for:', errorInfo.type);
+    }
+
+    /**
+     * Remove configuration error banner
+     */
+    removeConfigurationErrorBanner() {
+        const banner = document.getElementById('configuration-error-banner');
+        if (banner) {
+            banner.remove();
+            console.log('Configuration error banner removed');
         }
     }
 
@@ -1495,21 +1587,32 @@ class LexFlowApp {
     }
 
     /**
-     * Test AI and markdown utility integrations
+     * Test AI and markdown utility integrations with enhanced error handling
      */
     async testIntegrations() {
         try {
-            // Test Chrome AI availability
-            this.chromeAIAvailable = await this.testChromeAI();
+            // Enhanced Chrome AI availability checking with setup help banner
+            await this.checkChromeAIAvailability();
 
             // Test markdown utilities
             this.markdownUtilsAvailable = await this.testMarkdownUtils();
+
+            // Log integration test results
+            this.logWorkspaceState('integration_test', {
+                chromeAIAvailable: this.chromeAIAvailable,
+                markdownUtilsAvailable: this.markdownUtilsAvailable,
+                testTimestamp: Date.now()
+            });
 
             // Update UI based on availability
             this.updateIntegrationStatus();
 
         } catch (error) {
             console.error('Integration test failed:', error);
+            this.logWorkspaceState('integration_test_error', {
+                error: error.message,
+                stack: error.stack
+            });
         }
     }
 
@@ -1928,12 +2031,12 @@ class LexFlowApp {
             }
         }, 100);
 
-        // Debug logging for workspace state tracking
-        console.debug('Workspace State:', {
-            step: this.currentStep,
-            contextSize: this.selectedContext?.articles?.length || 0,
-            configValid: this.configurationValid,
-            view: this.currentView
+        // Enhanced debug logging for workspace state tracking
+        this.logWorkspaceState('step_navigation', {
+            fromStep: this.currentStep,
+            toStep: step,
+            hasContext: this.selectedContext?.articles?.length > 0,
+            navigationTrigger: 'user_click'
         });
 
         this.showToast(`Navegando para Etapa ${stepNumber}`, 'info', 1500);
@@ -2161,15 +2264,113 @@ class LexFlowApp {
             documentSelect.appendChild(fragment);
             documentSelect.disabled = false;
 
+            // Cache the documents for offline use
+            await this.cacheCorpusData(documents, 'documents');
+
             this.hideToast(loadingToastId);
             this.showToast(`${documents.length} documentos carregados`, 'success', 2000);
+            
+            // Log successful document loading
+            this.logWorkspaceState('documents_loaded', {
+                documentCount: documents.length,
+                source: cachedData ? 'cache' : 'network',
+                corpusUrl: corpusUrl
+            });
 
         } catch (error) {
             this.hideToast(loadingToastId);
-            this.handleNetworkError(error, 'Loading documents', config?.settings?.baseUrl);
+            
+            // Enhanced error handling with offline fallback
+            this.logWorkspaceState('document_loading_error', {
+                error: error.message,
+                isOnline: this.isOnline,
+                hasConfig: !!config?.settings
+            });
 
-            documentSelect.innerHTML = '<option value="">Erro ao carregar documentos</option>';
-            documentSelect.disabled = false;
+            // Try offline fallback first
+            if (!this.isOnline) {
+                const fallbackResult = await this.handleOfflineFallback('document_loading');
+                
+                if (fallbackResult.success && fallbackResult.data.length > 0) {
+                    // Use cached documents
+                    const fragment = document.createDocumentFragment();
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = '';
+                    defaultOption.textContent = 'Selecione um documento...';
+                    fragment.appendChild(defaultOption);
+
+                    fallbackResult.data.forEach(doc => {
+                        const option = document.createElement('option');
+                        option.value = doc.filename || doc.name;
+                        option.textContent = doc.title || doc.name;
+                        option.dataset.url = doc.url || `${config?.settings?.baseUrl}/${doc.filename || doc.name}`;
+                        fragment.appendChild(option);
+                    });
+
+                    documentSelect.innerHTML = '';
+                    documentSelect.appendChild(fragment);
+                    documentSelect.disabled = false;
+                    return;
+                }
+            }
+
+            // Handle network error with enhanced recovery options
+            const errorResult = await this.handleNetworkError(error, 'Loading documents', config?.settings?.baseUrl);
+            
+            if (errorResult.fallback === 'cached_data') {
+                // Try to use any available cached data
+                const cachedDocuments = await this.getCachedCorpusData('documents');
+                if (cachedDocuments.length > 0) {
+                    this.showToast('Usando documentos em cache', 'info', 3000);
+                    // Populate with cached documents (similar to above)
+                    const fragment = document.createDocumentFragment();
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = '';
+                    defaultOption.textContent = 'Selecione um documento...';
+                    fragment.appendChild(defaultOption);
+
+                    cachedDocuments.forEach(doc => {
+                        const option = document.createElement('option');
+                        option.value = doc.filename || doc.name;
+                        option.textContent = doc.title || doc.name;
+                        option.dataset.url = doc.url || `${config?.settings?.baseUrl}/${doc.filename || doc.name}`;
+                        fragment.appendChild(option);
+                    });
+
+                    documentSelect.innerHTML = '';
+                    documentSelect.appendChild(fragment);
+                    documentSelect.disabled = false;
+                    return;
+                }
+            }
+
+            // Fallback to default documents if all else fails
+            try {
+                const defaultDocs = await this.getDefaultDocuments(config?.settings?.country || 'br');
+                const fragment = document.createDocumentFragment();
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'Selecione um documento...';
+                fragment.appendChild(defaultOption);
+
+                defaultDocs.forEach(doc => {
+                    const option = document.createElement('option');
+                    option.value = doc.filename || doc.name;
+                    option.textContent = doc.title || doc.name;
+                    option.dataset.url = doc.url || `${config?.settings?.baseUrl}/${doc.filename || doc.name}`;
+                    fragment.appendChild(option);
+                });
+
+                documentSelect.innerHTML = '';
+                documentSelect.appendChild(fragment);
+                documentSelect.disabled = false;
+                
+                this.showToast('Usando documentos padrão', 'warning', 3000);
+            } catch (fallbackError) {
+                console.error('Failed to load default documents:', fallbackError);
+                documentSelect.innerHTML = '<option value="">Erro ao carregar documentos</option>';
+                documentSelect.disabled = false;
+            }
         }
     }
 
@@ -4328,6 +4529,275 @@ ${outputArea.value}
         // Hide old toast and show new one
         this.hideToast(toastId);
         return this.showLoadingToast(message);
+    }
+
+    /**
+     * Implement offline mode fallback for cached corpus data
+     * @param {string} context - Context of the operation requiring fallback
+     * @returns {Object} - Cached data if available, or fallback instructions
+     */
+    async handleOfflineFallback(context = 'document_loading') {
+        console.debug('Handling offline fallback for:', context);
+        
+        try {
+            // Check for cached corpus data
+            const cachedData = await this.getCachedCorpusData(context);
+            
+            if (cachedData && cachedData.length > 0) {
+                this.showToast(
+                    `Modo offline: usando ${cachedData.length} documentos em cache`,
+                    'info',
+                    5000
+                );
+                
+                return {
+                    success: true,
+                    data: cachedData,
+                    source: 'cache',
+                    timestamp: cachedData.lastUpdated || Date.now()
+                };
+            } else {
+                // No cached data available
+                this.showToastWithAction(
+                    'Sem conexão e nenhum dado em cache disponível',
+                    'warning',
+                    8000,
+                    'Tentar Conectar',
+                    () => {
+                        if (navigator.onLine) {
+                            this.retryFailedOperations();
+                        } else {
+                            this.showToast('Ainda sem conexão', 'warning', 3000);
+                        }
+                    }
+                );
+                
+                return {
+                    success: false,
+                    error: 'no_cache',
+                    fallback: 'manual_entry'
+                };
+            }
+        } catch (error) {
+            console.error('Error in offline fallback:', error);
+            return {
+                success: false,
+                error: 'fallback_failed',
+                fallback: 'manual_entry'
+            };
+        }
+    }
+
+    /**
+     * Get cached corpus data for offline use
+     * @param {string} context - Context of the data request
+     * @returns {Array} - Cached corpus data or empty array
+     */
+    async getCachedCorpusData(context) {
+        try {
+            // Check localStorage for cached documents
+            const cacheKey = `lexflow-cache-documents-${context}`;
+            const cachedString = localStorage.getItem(cacheKey);
+            
+            if (cachedString) {
+                const cached = JSON.parse(cachedString);
+                
+                // Check if cache is still valid (24 hours)
+                const cacheAge = Date.now() - (cached.timestamp || 0);
+                const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+                
+                if (cacheAge < maxAge) {
+                    console.debug(`Using cached corpus data (${cacheAge / 1000 / 60} minutes old)`);
+                    return cached.data || [];
+                } else {
+                    console.debug('Cached corpus data expired, removing');
+                    localStorage.removeItem(cacheKey);
+                }
+            }
+            
+            // Check IndexedDB for more persistent cache
+            const settings = await getSetting('app-settings');
+            if (settings && settings.cachedDocuments) {
+                console.debug('Using IndexedDB cached documents');
+                return settings.cachedDocuments;
+            }
+            
+            return [];
+        } catch (error) {
+            console.warn('Error retrieving cached corpus data:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Cache corpus data for offline use
+     * @param {Array} documents - Documents to cache
+     * @param {string} context - Context of the data
+     */
+    async cacheCorpusData(documents, context = 'documents') {
+        try {
+            if (!documents || documents.length === 0) return;
+            
+            const cacheData = {
+                data: documents,
+                timestamp: Date.now(),
+                context: context
+            };
+            
+            // Cache in localStorage for quick access
+            const cacheKey = `lexflow-cache-documents-${context}`;
+            localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+            
+            // Also cache in IndexedDB for persistence
+            const settings = await getSetting('app-settings') || {};
+            settings.cachedDocuments = documents;
+            settings.cacheTimestamp = Date.now();
+            await setSetting('app-settings', settings);
+            
+            console.debug(`Cached ${documents.length} documents for offline use`);
+        } catch (error) {
+            console.warn('Error caching corpus data:', error);
+        }
+    }
+
+    /**
+     * Enhanced debug logging for workspace state tracking
+     * @param {string} action - Action being performed
+     * @param {Object} additionalData - Additional data to log
+     */
+    logWorkspaceState(action = 'state_change', additionalData = {}) {
+        const stateInfo = {
+            timestamp: new Date().toISOString(),
+            action: action,
+            currentView: this.currentView,
+            currentStep: this.currentStep,
+            contextSize: this.selectedContext?.articles?.length || 0,
+            contextText: this.selectedContext?.text?.length || 0,
+            isOnline: this.isOnline,
+            chromeAIAvailable: this.chromeAIAvailable,
+            configurationValid: this.configurationValid,
+            ...additionalData
+        };
+        
+        console.debug('Workspace State:', stateInfo);
+        
+        // Store state log for debugging (keep last 20 entries)
+        try {
+            const stateLogs = JSON.parse(localStorage.getItem('lexflow-workspace-logs') || '[]');
+            stateLogs.push(stateInfo);
+            
+            // Keep only last 20 entries
+            if (stateLogs.length > 20) {
+                stateLogs.splice(0, stateLogs.length - 20);
+            }
+            
+            localStorage.setItem('lexflow-workspace-logs', JSON.stringify(stateLogs));
+        } catch (error) {
+            console.warn('Could not store workspace state log:', error);
+        }
+    }
+
+    /**
+     * Enhanced Chrome AI availability checking with setup help banner
+     * @returns {boolean} - True if Chrome AI is available and working
+     */
+    async checkChromeAIAvailability() {
+        console.debug('Checking Chrome AI availability...');
+        
+        try {
+            const isAvailable = await this.testChromeAI();
+            this.chromeAIAvailable = isAvailable;
+            
+            if (!isAvailable) {
+                this.showChromeAISetupBanner();
+            } else {
+                this.removeChromeAISetupBanner();
+            }
+            
+            this.updateIntegrationStatus();
+            
+            // Log the availability check
+            this.logWorkspaceState('chrome_ai_check', {
+                chromeAIAvailable: isAvailable,
+                hasAIObject: 'ai' in self,
+                hasAssistant: 'ai' in self && 'assistant' in self.ai,
+                hasSummarizer: 'ai' in self && 'summarizer' in self.ai
+            });
+            
+            return isAvailable;
+        } catch (error) {
+            console.error('Error checking Chrome AI availability:', error);
+            this.chromeAIAvailable = false;
+            this.showChromeAISetupBanner();
+            this.updateIntegrationStatus();
+            return false;
+        }
+    }
+
+    /**
+     * Show Chrome AI setup help banner
+     */
+    showChromeAISetupBanner() {
+        // Remove any existing AI setup banner
+        this.removeChromeAISetupBanner();
+        
+        // Create banner element
+        const banner = document.createElement('div');
+        banner.id = 'chrome-ai-banner';
+        banner.className = 'chrome-ai-banner info-banner';
+        banner.setAttribute('role', 'alert');
+        banner.setAttribute('aria-live', 'polite');
+        
+        banner.innerHTML = `
+            <div class="banner-content">
+                <div class="banner-icon">🤖</div>
+                <div class="banner-message">
+                    <strong>Chrome AI não disponível</strong><br>
+                    Para usar a funcionalidade de IA, configure o Chrome AI nas configurações do navegador.
+                </div>
+                <button class="banner-action" id="chrome-ai-help-btn">
+                    Ajuda para Configurar
+                </button>
+                <button class="banner-close" id="close-chrome-ai-banner" aria-label="Fechar aviso">
+                    ×
+                </button>
+            </div>
+        `;
+        
+        // Insert banner in the Prompt Studio step
+        const promptStudioStep = document.querySelector('#step-2');
+        if (promptStudioStep) {
+            promptStudioStep.insertBefore(banner, promptStudioStep.firstChild);
+        }
+        
+        // Add event listeners
+        const helpBtn = banner.querySelector('#chrome-ai-help-btn');
+        const closeBtn = banner.querySelector('#close-chrome-ai-banner');
+        
+        if (helpBtn) {
+            helpBtn.addEventListener('click', () => {
+                this.showAISetupHelp();
+            });
+        }
+        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                this.removeChromeAISetupBanner();
+            });
+        }
+        
+        console.log('Chrome AI setup banner shown');
+    }
+
+    /**
+     * Remove Chrome AI setup banner
+     */
+    removeChromeAISetupBanner() {
+        const banner = document.getElementById('chrome-ai-banner');
+        if (banner) {
+            banner.remove();
+            console.log('Chrome AI setup banner removed');
+        }
     }
 
     /**
