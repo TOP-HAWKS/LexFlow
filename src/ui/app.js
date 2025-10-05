@@ -1924,50 +1924,20 @@ class LexFlowApp {
 
     /**
      * Initialize jurisdiction form validation
+     * @deprecated - Jurisdiction fields are now managed through settings modal
      */
     initJurisdictionValidation() {
-        const fields = ['language', 'country', 'state', 'city', 'corpus-url'];
-
-        fields.forEach(fieldId => {
-            const field = document.getElementById(fieldId);
-            if (field) {
-                // Validate on blur
-                field.addEventListener('blur', () => {
-                    this.validateJurisdictionField(fieldId);
-                });
-
-                // Clear validation on focus
-                field.addEventListener('focus', () => {
-                    this.clearJurisdictionFieldValidation(fieldId);
-                });
-
-                // Auto-save on change for better UX
-                field.addEventListener('change', () => {
-                    this.autoSaveJurisdictionSettings();
-                });
-            }
-        });
+        // No-op: Jurisdiction fields are now managed through settings modal
+        console.debug('Jurisdiction validation initialization skipped - using settings modal');
     }
 
     /**
      * Initialize jurisdiction event listeners
+     * @deprecated - Jurisdiction fields are now managed through settings modal
      */
     initJurisdictionEventListeners() {
-        // Country change updates state options
-        const countryField = document.getElementById('country');
-        if (countryField) {
-            countryField.addEventListener('change', () => {
-                this.updateStateOptions();
-            });
-        }
-
-        // Corpus URL validation and testing
-        const corpusField = document.getElementById('corpus-url');
-        if (corpusField) {
-            corpusField.addEventListener('input', () => {
-                this.debounceCorpusValidation();
-            });
-        }
+        // No-op: Jurisdiction fields are now managed through settings modal
+        console.debug('Jurisdiction event listeners skipped - using settings modal');
     }
 
     /**
@@ -1975,63 +1945,10 @@ class LexFlowApp {
      * @param {string} fieldId - The field ID to validate
      */
     validateJurisdictionField(fieldId) {
-        const field = document.getElementById(fieldId);
-        if (!field) return;
-
-        const value = field.value.trim();
-        let isValid = true;
-        let errorMessage = '';
-
-        // Clear previous validation
-        field.classList.remove('error', 'success');
-        this.clearFieldError(field);
-
-        switch (fieldId) {
-            case 'language':
-                if (!value) {
-                    isValid = false;
-                    errorMessage = 'Idioma é obrigatório';
-                }
-                break;
-
-            case 'country':
-                if (!value) {
-                    isValid = false;
-                    errorMessage = 'País é obrigatório';
-                }
-                break;
-
-            case 'state':
-                if (value && value.length < 2) {
-                    isValid = false;
-                    errorMessage = 'Estado deve ter pelo menos 2 caracteres';
-                }
-                break;
-
-            case 'city':
-                if (value && value.length < 2) {
-                    isValid = false;
-                    errorMessage = 'Cidade deve ter pelo menos 2 caracteres';
-                }
-                break;
-
-            case 'corpus-url':
-                if (value && !this.isValidUrl(value)) {
-                    isValid = false;
-                    errorMessage = 'URL inválida. Use formato: https://exemplo.com';
-                }
-                break;
-        }
-
-        // Apply validation state
-        if (!isValid) {
-            field.classList.add('error');
-            this.showFieldError(field, errorMessage);
-        } else if (value) {
-            field.classList.add('success');
-        }
-
-        return isValid;
+        // Jurisdiction fields are now managed through settings modal
+        // This function is kept for backward compatibility but does nothing
+        console.debug('Jurisdiction field validation skipped - using settings modal validation');
+        return true;
     }
 
     /**
@@ -2093,69 +2010,29 @@ class LexFlowApp {
 
     /**
      * Update state options based on selected country
+     * @deprecated - State options are now managed through settings modal
      */
     updateStateOptions() {
-        const countryField = document.getElementById('country');
-        const stateField = document.getElementById('state');
-
-        if (!countryField || !stateField) return;
-
-        const country = countryField.value;
-
-        // Clear current state value
-        stateField.value = '';
-
-        // Update placeholder based on country
-        switch (country) {
-            case 'br':
-                stateField.placeholder = 'ex: Rio Grande do Sul, São Paulo';
-                break;
-            case 'us':
-                stateField.placeholder = 'ex: California, New York';
-                break;
-            case 'es':
-                stateField.placeholder = 'ex: Madrid, Cataluña';
-                break;
-            default:
-                stateField.placeholder = 'Digite o estado/província';
-        }
+        // No-op: State options are now managed through settings modal
+        console.debug('State options update skipped - using settings modal');
     }
 
     /**
      * Debounced corpus URL validation
+     * @deprecated - Corpus URL validation is now handled through settings modal
      */
     debounceCorpusValidation() {
-        clearTimeout(this.corpusValidationTimeout);
-        this.corpusValidationTimeout = setTimeout(() => {
-            this.validateCorpusUrl();
-        }, 1000);
+        // No-op: Corpus URL validation is now handled through settings modal
+        console.debug('Debounced corpus validation skipped - using settings modal validation');
     }
 
     /**
      * Validate corpus URL by testing connectivity
+     * @deprecated - Corpus URL validation is now handled through settings modal
      */
     async validateCorpusUrl() {
-        const corpusField = document.getElementById('corpus-url');
-        if (!corpusField || !corpusField.value) return;
-
-        const url = corpusField.value.trim();
-        if (!this.isValidUrl(url)) return;
-
-        try {
-            // Test if URL is accessible
-            const testUrl = url.endsWith('/') ? url + 'README.md' : url + '/README.md';
-            const response = await fetch(testUrl, { method: 'HEAD' });
-
-            if (response.ok) {
-                corpusField.classList.remove('error');
-                corpusField.classList.add('success');
-                this.clearFieldError(corpusField);
-            } else {
-                this.showFieldWarning(corpusField, 'URL pode não estar acessível');
-            }
-        } catch (error) {
-            this.showFieldWarning(corpusField, 'Não foi possível verificar a URL');
-        }
+        // No-op: Corpus URL validation is now handled through settings modal
+        console.debug('Corpus URL validation skipped - using settings modal validation');
     }
 
     /**
@@ -2172,7 +2049,7 @@ class LexFlowApp {
      * Save jurisdiction settings without user feedback
      */
     async saveJurisdictionSettingsQuietly() {
-        const settings = this.getJurisdictionSettings();
+        const settings = await this.getJurisdictionSettings();
 
         try {
             // Save to IndexedDB using existing db.js
@@ -2188,43 +2065,57 @@ class LexFlowApp {
     }
 
     /**
-     * Get current jurisdiction settings from form
+     * Get current jurisdiction settings from IndexedDB
      * @returns {Object} - Current jurisdiction settings
      */
-    getJurisdictionSettings() {
-        return {
-            language: document.getElementById('language')?.value || '',
-            country: document.getElementById('country')?.value || '',
-            state: document.getElementById('state')?.value || '',
-            city: document.getElementById('city')?.value || '',
-            corpusUrl: document.getElementById('corpus-url')?.value || '',
-            timestamp: Date.now()
-        };
+    async getJurisdictionSettings() {
+        try {
+            const settings = await getSetting('app-settings');
+            if (!settings) {
+                return {
+                    language: '',
+                    country: '',
+                    state: '',
+                    city: '',
+                    corpusUrl: '',
+                    timestamp: Date.now()
+                };
+            }
+            
+            return {
+                language: settings.language || '',
+                country: settings.country || '',
+                state: settings.state || '',
+                city: settings.city || '',
+                corpusUrl: settings.baseUrl || '',
+                timestamp: Date.now()
+            };
+        } catch (error) {
+            console.error('Error loading jurisdiction settings:', error);
+            return {
+                language: '',
+                country: '',
+                state: '',
+                city: '',
+                corpusUrl: '',
+                timestamp: Date.now()
+            };
+        }
     }
 
     /**
      * Save jurisdiction settings and continue to next step
      */
     async saveJurisdictionAndContinue() {
-        // Validate all fields first
-        const fields = ['language', 'country', 'state', 'city', 'corpus-url'];
-        let isValid = true;
-
-        fields.forEach(fieldId => {
-            if (!this.validateJurisdictionField(fieldId)) {
-                isValid = false;
-            }
-        });
-
-        // Check required fields
-        const settings = this.getJurisdictionSettings();
-        if (!settings.language || !settings.country) {
-            this.showToast('Por favor, preencha os campos obrigatórios (Idioma e País)', 'error');
-            return;
-        }
-
-        if (!isValid) {
-            this.showToast('Por favor, corrija os erros no formulário', 'error');
+        // Jurisdiction settings are now managed through settings modal
+        // This function is kept for backward compatibility
+        console.debug('saveJurisdictionAndContinue called - redirecting to settings modal');
+        
+        // Check if settings are configured
+        const config = await this.validateRequiredSettings();
+        if (!config.isValid) {
+            this.showToast('Configure as configurações primeiro', 'warning');
+            this.showModal('settings');
             return;
         }
 
@@ -2300,22 +2191,9 @@ class LexFlowApp {
                 }
             }
 
-            if (settings) {
-                // Populate form fields
-                document.getElementById('language').value = settings.language || 'pt-BR';
-                document.getElementById('country').value = settings.country || 'br';
-                document.getElementById('state').value = settings.state || '';
-                document.getElementById('city').value = settings.city || '';
-                document.getElementById('corpus-url').value = settings.corpusUrl || '';
-
-                // Update state options based on country
-                this.updateStateOptions();
-
-                // Mark step as completed if all required fields are filled
-                if (settings.language && settings.country) {
-                    document.querySelector('.step[data-step="1"]').classList.add('completed');
-                }
-            }
+            // Settings are now managed through the settings modal
+            // No need to populate workspace form fields as they no longer exist
+            console.debug('Jurisdiction settings loaded:', settings);
         } catch (error) {
             console.error('Error loading jurisdiction settings:', error);
         }
@@ -2386,15 +2264,16 @@ class LexFlowApp {
         const loadingToastId = this.showLoadingToast('Carregando documentos...');
 
         try {
-            // Get corpus URL from jurisdiction settings
-            const settings = await this.getJurisdictionSettings();
-            const corpusUrl = settings.corpusUrl;
-
-            if (!corpusUrl) {
+            // Get settings from IndexedDB
+            const config = await this.validateRequiredSettings();
+            
+            if (!config.isValid) {
                 this.hideToast(loadingToastId);
-                this.showToast('Configure a URL do corpus na Etapa 1', 'error');
+                this.showConfigurationBanner(config.missing);
                 return;
             }
+
+            const corpusUrl = config.settings.baseUrl;
 
             // Show loading state
             documentSelect.innerHTML = '<option value="">Carregando documentos...</option>';
@@ -2466,7 +2345,7 @@ class LexFlowApp {
 
         } catch (error) {
             this.hideToast(loadingToastId);
-            this.handleNetworkError(error, 'Loading documents', settings?.corpusUrl);
+            this.handleNetworkError(error, 'Loading documents', config?.settings?.baseUrl);
 
             documentSelect.innerHTML = '<option value="">Erro ao carregar documentos</option>';
             documentSelect.disabled = false;
@@ -4881,30 +4760,11 @@ ${outputArea.value}
     /**
      * Update workspace jurisdiction fields from settings if they're empty
      * @param {Object} settings - The settings object
+     * @deprecated - Jurisdiction fields are now managed through settings modal only
      */
     updateWorkspaceFromSettings(settings) {
-        // Only update if workspace fields are empty
-        const languageField = document.getElementById('language');
-        const countryField = document.getElementById('country');
-        const stateField = document.getElementById('state');
-        const cityField = document.getElementById('city');
-        const corpusField = document.getElementById('corpus-url');
-
-        if (languageField && !languageField.value && settings.language) {
-            languageField.value = settings.language;
-        }
-        if (countryField && !countryField.value && settings.country) {
-            countryField.value = settings.country;
-        }
-        if (stateField && !stateField.value && settings.state) {
-            stateField.value = settings.state;
-        }
-        if (cityField && !cityField.value && settings.city) {
-            cityField.value = settings.city;
-        }
-        if (corpusField && !corpusField.value && settings.corpusUrl) {
-            corpusField.value = settings.corpusUrl;
-        }
+        // No-op: Jurisdiction fields are now managed through settings modal only
+        console.debug('Workspace settings update skipped - using settings modal configuration');
     }
 
     /**
@@ -5102,7 +4962,14 @@ ${outputArea.value}
      */
     async validateRequiredSettings() {
         try {
-            const settings = await getSetting('app-settings');
+            let settings = await getSetting('app-settings');
+            
+            // If no settings exist, try to load defaults
+            if (!settings) {
+                console.log('No settings found, loading defaults...');
+                settings = await this.loadConfigurationDefaults();
+            }
+            
             const missing = [];
             
             // Check required settings
