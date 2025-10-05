@@ -316,11 +316,12 @@
                 
                 <h4>Integração Externa</h4>
                 <div class="form-field mb-1">
-                    <label for="settings-github-token">Token do GitHub (opcional):</label>
-                    <input type="password" id="settings-github-token" 
-                           placeholder="ghp_xxxxxxxxxxxx">
-                    <small class="muted">Para criação automática de issues no GitHub</small>
-                    <div class="error-message">Token do GitHub inválido</div>
+                    <label for="settings-serverless-endpoint">Endpoint Serverless:</label>
+                    <input type="url" id="settings-serverless-endpoint" 
+                           placeholder="https://api.lexflow.cloudflare.workers.dev/pr"
+                           title="Endpoint para criação automática de Pull Requests no repositório público">
+                    <small class="muted">URL do endpoint para criação automática de Pull Requests</small>
+                    <div class="error-message">URL do endpoint inválida</div>
                 </div>
                 
                 <div class="text-center mt-2">
