@@ -155,31 +155,33 @@ async function submitToServerlessEndpoint() {
   } catch (error) {
     console.error('Serverless submission error:', error);
     
-    // Handle different error types
-    let userMessage = 'Error submitting to endpoint. Check serverless config.';
-    
-    if (error.name === 'AbortError') {
-      userMessage = 'Timeout na requisição. Tente novamente.';
-    } else if (error.message.includes('fetch')) {
-      userMessage = 'Erro de rede. Verifique sua conexão.';
-    } else if (error.message.includes('não encontrado')) {
-      userMessage = error.message;
-    } else if (error.message.includes('Acesso negado')) {
-      userMessage = error.message;
-    } else if (error.message.includes('Resposta inválida')) {
-      userMessage = error.message;
-    } else if (error.message.includes('servidor')) {
-      userMessage = error.message;
-    } else if (error.message && !error.message.includes('HTTP')) {
-      // Use server-provided error message if it's not a generic HTTP error
-      userMessage = error.message;
-    }
-    
-    // Use existing error handling if available
-    if (window.app && window.app.handleNetworkError) {
+    // Use enhanced serverless error handling if available
+    if (window.app && window.app.handleServerlessError) {
+      await window.app.handleServerlessError(error, 'Serverless submission');
+    } else if (window.app && window.app.handleNetworkError) {
+      // Fallback to network error handling for compatibility
       await window.app.handleNetworkError(error, 'Serverless submission', endpoint);
     } else {
-      // Fallback error handling
+      // Final fallback error handling
+      let userMessage = 'Error submitting to endpoint. Check serverless config.';
+      
+      if (error.name === 'AbortError') {
+        userMessage = 'Timeout na requisição. Tente novamente.';
+      } else if (error.message.includes('fetch')) {
+        userMessage = 'Erro de rede. Verifique sua conexão.';
+      } else if (error.message.includes('não encontrado')) {
+        userMessage = error.message;
+      } else if (error.message.includes('Acesso negado')) {
+        userMessage = error.message;
+      } else if (error.message.includes('Resposta inválida')) {
+        userMessage = error.message;
+      } else if (error.message.includes('servidor')) {
+        userMessage = error.message;
+      } else if (error.message && !error.message.includes('HTTP')) {
+        // Use server-provided error message if it's not a generic HTTP error
+        userMessage = error.message;
+      }
+      
       if (window.app && window.app.showToast) {
         window.app.showToast(userMessage, 'error', 8000);
       } else {
@@ -188,4 +190,8 @@ async function submitToServerlessEndpoint() {
     }
   }
 }
+
+// Make submitToServerlessEndpoint globally accessible for retry functionality
+window.submitToServerlessEndpoint = submitToServerlessEndpoint;
+
 loadList();

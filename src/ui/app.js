@@ -252,6 +252,103 @@ class LexFlowApp {
             };
         }
         
+        // Serverless endpoint errors
+        if (errorMessage.includes('serverless') || errorMessage.includes('endpoint') || 
+            context.includes('Serverless') || context.includes('serverless') ||
+            errorMessage.includes('Configure o endpoint') || errorMessage.includes('URL do endpoint') ||
+            errorMessage.includes('Endpoint não encontrado') || errorMessage.includes('Timeout na requisição')) {
+            
+            // Determine specific serverless error type
+            if (errorMessage.includes('Configure o endpoint') || errorMessage.includes('não configurado')) {
+                return {
+                    type: 'serverless_config',
+                    severity: 'high',
+                    userMessage: 'Endpoint serverless não configurado',
+                    suggestion: 'Configure o endpoint serverless nas configurações',
+                    recoverable: true,
+                    retryable: false,
+                    helpAction: () => this.navigate('settings')
+                };
+            }
+            
+            if (errorMessage.includes('URL do endpoint') || errorMessage.includes('https://')) {
+                return {
+                    type: 'serverless_validation',
+                    severity: 'medium',
+                    userMessage: 'URL do endpoint inválida',
+                    suggestion: 'Verifique se a URL começa com https://',
+                    recoverable: true,
+                    retryable: false,
+                    helpAction: () => this.navigate('settings')
+                };
+            }
+            
+            if (errorMessage.includes('404') || errorMessage.includes('não encontrado')) {
+                return {
+                    type: 'serverless_not_found',
+                    severity: 'medium',
+                    userMessage: 'Endpoint não encontrado',
+                    suggestion: 'Verifique se a URL do endpoint está correta',
+                    recoverable: true,
+                    retryable: true
+                };
+            }
+            
+            if (errorMessage.includes('403') || errorMessage.includes('401') || errorMessage.includes('Acesso negado')) {
+                return {
+                    type: 'serverless_auth',
+                    severity: 'high',
+                    userMessage: 'Acesso negado ao endpoint',
+                    suggestion: 'Verifique a configuração de autenticação do endpoint',
+                    recoverable: true,
+                    retryable: false
+                };
+            }
+            
+            if (errorMessage.includes('500') || errorMessage.includes('servidor')) {
+                return {
+                    type: 'serverless_server',
+                    severity: 'medium',
+                    userMessage: 'Erro interno do servidor',
+                    suggestion: 'Problema temporário no servidor. Tente novamente em alguns minutos.',
+                    recoverable: true,
+                    retryable: true
+                };
+            }
+            
+            if (errorMessage.includes('Timeout') || errorMessage.includes('timeout') || errorMessage.includes('AbortError')) {
+                return {
+                    type: 'serverless_timeout',
+                    severity: 'medium',
+                    userMessage: 'Timeout na requisição',
+                    suggestion: 'O servidor demorou para responder. Tente novamente.',
+                    recoverable: true,
+                    retryable: true
+                };
+            }
+            
+            if (errorMessage.includes('Resposta inválida') || errorMessage.includes('JSON')) {
+                return {
+                    type: 'serverless_response',
+                    severity: 'medium',
+                    userMessage: 'Resposta inválida do servidor',
+                    suggestion: 'O servidor retornou dados em formato incorreto',
+                    recoverable: true,
+                    retryable: true
+                };
+            }
+            
+            // Generic serverless error
+            return {
+                type: 'serverless_generic',
+                severity: 'medium',
+                userMessage: 'Erro no endpoint serverless',
+                suggestion: 'Verifique a configuração do endpoint e tente novamente',
+                recoverable: true,
+                retryable: true
+            };
+        }
+        
         // Generic/Unknown errors
         return {
             type: 'unknown',
@@ -366,6 +463,37 @@ class LexFlowApp {
                 
             case 'ai':
                 this.fallbackToManualMode();
+                break;
+                
+            case 'serverless_config':
+            case 'serverless_validation':
+                // No automatic recovery - user needs to fix configuration
+                console.log('Serverless configuration error - manual intervention required');
+                break;
+                
+            case 'serverless_not_found':
+            case 'serverless_server':
+            case 'serverless_timeout':
+            case 'serverless_response':
+            case 'serverless_generic':
+                // These are retryable serverless errors with exponential backoff
+                if (this.isOnline) {
+                    // Use setTimeout to implement exponential backoff in error recovery
+                    const retryKey = `serverless-${context}`;
+                    const currentRetries = this.errorRetryCount.get(retryKey) || 0;
+                    
+                    if (currentRetries < this.maxRetries) {
+                        const delay = Math.pow(2, currentRetries) * 1000;
+                        setTimeout(() => {
+                            this.retryServerlessOperation(context);
+                        }, delay);
+                    }
+                }
+                break;
+                
+            case 'serverless_auth':
+                // Authentication errors are not automatically retryable
+                console.log('Serverless authentication error - check endpoint configuration');
                 break;
                 
             default:
@@ -495,6 +623,108 @@ class LexFlowApp {
         this.fallbackToSessionStorage();
         
         return { success: false, error: 'storage_error', fallback: fallback };
+    }
+
+    /**
+     * Enhanced serverless endpoint error handling
+     * @param {Error} error - Serverless endpoint error
+     * @param {string} context - Context of the serverless operation
+     * @returns {Object} - Error response with fallback options
+     */
+    async handleServerlessError(error, context = 'Serverless operation') {
+        console.error(`Serverless error in ${context}:`, error);
+        
+        const errorInfo = this.categorizeError(error, context);
+        let fallback = 'manual_retry';
+        
+        // Determine specific serverless error handling
+        switch (errorInfo.type) {
+            case 'serverless_config':
+                this.showToastWithAction(
+                    errorInfo.userMessage + '. ' + errorInfo.suggestion,
+                    'error',
+                    8000,
+                    'Configurar',
+                    () => this.navigate('settings')
+                );
+                fallback = 'configuration_required';
+                break;
+                
+            case 'serverless_validation':
+                this.showToastWithAction(
+                    errorInfo.userMessage + '. ' + errorInfo.suggestion,
+                    'error',
+                    6000,
+                    'Configurar',
+                    () => this.navigate('settings')
+                );
+                fallback = 'validation_required';
+                break;
+                
+            case 'serverless_not_found':
+            case 'serverless_server':
+            case 'serverless_timeout':
+            case 'serverless_response':
+                // Check if we should show manual retry or automatic retry
+                const retryKey = `serverless-${context}`;
+                const currentRetries = this.errorRetryCount.get(retryKey) || 0;
+                
+                if (currentRetries < this.maxRetries) {
+                    // Show toast with both automatic retry info and manual retry option
+                    this.showToastWithAction(
+                        errorInfo.userMessage + '. Tentativa automática em andamento.',
+                        'error',
+                        6000,
+                        'Tentar Agora',
+                        () => {
+                            // Reset retry count for immediate manual retry
+                            this.errorRetryCount.delete(retryKey);
+                            this.retryServerlessOperation(context);
+                        }
+                    );
+                } else {
+                    // Max retries reached, only show manual retry
+                    this.showToastWithAction(
+                        errorInfo.userMessage + '. ' + errorInfo.suggestion,
+                        'error',
+                        8000,
+                        'Tentar Novamente',
+                        () => {
+                            // Reset retry count for manual retry
+                            this.errorRetryCount.delete(retryKey);
+                            this.retryServerlessOperation(context);
+                        }
+                    );
+                }
+                fallback = 'retryable';
+                break;
+                
+            case 'serverless_auth':
+                this.showToast(
+                    errorInfo.userMessage + '. ' + errorInfo.suggestion,
+                    'error',
+                    8000
+                );
+                fallback = 'authentication_required';
+                break;
+                
+            default:
+                this.showToastWithAction(
+                    errorInfo.userMessage + '. ' + errorInfo.suggestion,
+                    'error',
+                    6000,
+                    'Tentar Novamente',
+                    () => {
+                        // Reset retry count for manual retry
+                        const retryKey = `serverless-${context}`;
+                        this.errorRetryCount.delete(retryKey);
+                        this.retryServerlessOperation(context);
+                    }
+                );
+                fallback = 'generic_retry';
+        }
+        
+        return { success: false, error: errorInfo.type, fallback: fallback };
     }
 
     /**
@@ -737,6 +967,59 @@ class LexFlowApp {
             }
         } catch (error) {
             this.handleNetworkError(error, context, url);
+        }
+    }
+
+    /**
+     * Retry serverless endpoint operation with exponential backoff
+     * @param {string} context - Context of the serverless operation
+     * @param {number} retryAttempt - Current retry attempt (for exponential backoff)
+     */
+    async retryServerlessOperation(context, retryAttempt = 0) {
+        if (!this.isOnline) {
+            this.showToast('Ainda sem conexão', 'warning', 3000);
+            return;
+        }
+        
+        const retryKey = `serverless-${context}`;
+        const currentRetries = this.errorRetryCount.get(retryKey) || 0;
+        
+        // Check if we've exceeded max retries
+        if (currentRetries >= this.maxRetries) {
+            this.showToast('Máximo de tentativas atingido. Verifique a configuração.', 'error', 5000);
+            this.errorRetryCount.delete(retryKey);
+            return;
+        }
+        
+        // Increment retry count
+        this.errorRetryCount.set(retryKey, currentRetries + 1);
+        
+        // Calculate delay with exponential backoff (1s, 2s, 4s, 8s...)
+        const delay = Math.pow(2, currentRetries) * 1000;
+        const delaySeconds = delay / 1000;
+        
+        this.showToast(`Tentando novamente em ${delaySeconds}s... (${currentRetries + 1}/${this.maxRetries})`, 'info', delay);
+        
+        // Wait for the calculated delay
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        // Retry based on context
+        try {
+            if (context.includes('submission') || context.includes('Serverless')) {
+                // Trigger retry of serverless submission if the form is available
+                const submitButton = document.getElementById('btnOpenIssue');
+                if (submitButton && typeof window.submitToServerlessEndpoint === 'function') {
+                    await window.submitToServerlessEndpoint();
+                    // If successful, reset retry count
+                    this.errorRetryCount.delete(retryKey);
+                } else {
+                    this.showToast('Recarregue a página para tentar novamente', 'info', 3000);
+                }
+            }
+        } catch (error) {
+            // If retry fails, the error will be handled by the error system
+            // which may trigger another retry if appropriate
+            await this.handleServerlessError(error, context);
         }
     }
 
