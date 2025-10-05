@@ -279,6 +279,43 @@ button.outline:hover:not(:disabled) {
 }
 
 /* Workspace view styles */
+.workspace-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.workspace-header h2 {
+    margin: 0;
+}
+
+.settings-icon-btn {
+    background: transparent;
+    border: 1px solid var(--pico-muted-border-color);
+    padding: 0.5rem;
+    border-radius: var(--pico-border-radius);
+    cursor: pointer;
+    font-size: 1rem;
+    transition: var(--pico-transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+}
+
+.settings-icon-btn:hover {
+    background: var(--pico-secondary-background);
+    border-color: var(--pico-primary-color);
+    transform: translateY(-1px);
+}
+
+.settings-icon-btn:focus {
+    outline: 2px solid var(--pico-primary-color);
+    outline-offset: 2px;
+}
+
 .workspace-steps {
     display: flex;
     justify-content: space-between;

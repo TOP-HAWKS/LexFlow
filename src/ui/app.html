@@ -75,95 +75,33 @@
 
             <!-- Workspace View -->
             <section id="workspace-view" class="view">
-                <h2>Workspace Jurídico</h2>
+                <div class="workspace-header">
+                    <h2>Workspace Jurídico</h2>
+                    <button id="workspace-settings-btn" class="settings-icon-btn" 
+                            aria-label="Abrir configurações do workspace" title="Configurações">
+                        ⚙️
+                    </button>
+                </div>
                 
                 <div class="workspace-steps" role="tablist" aria-label="Etapas do workspace jurídico">
                     <div class="step active" data-step="1" role="tab" tabindex="0" 
                          aria-selected="true" aria-controls="step-1" 
-                         aria-label="Etapa 1: Configuração de Jurisdição e Corpus">
+                         aria-label="Etapa 1: Seleção de Leis e Artigos">
                         <div class="step-number">1</div>
-                        <span>Jurisdição & Corpus</span>
+                        <span>Leis & Artigos</span>
                     </div>
                     <div class="step" data-step="2" role="tab" tabindex="-1"
                          aria-selected="false" aria-controls="step-2"
-                         aria-label="Etapa 2: Seleção de Leis e Artigos">
+                         aria-label="Etapa 2: Prompt Studio e Execução de IA">
                         <div class="step-number">2</div>
-                        <span>Leis & Artigos</span>
-                    </div>
-                    <div class="step" data-step="3" role="tab" tabindex="-1"
-                         aria-selected="false" aria-controls="step-3"
-                         aria-label="Etapa 3: Prompt Studio e Execução de IA">
-                        <div class="step-number">3</div>
                         <span>Prompt Studio</span>
                     </div>
                 </div>
                 
                 <div class="workspace-content">
-                    <!-- Step 1: Jurisdiction Configuration -->
+                    <!-- Step 1: Document Search -->
                     <div id="step-1" class="step-content active" role="tabpanel" 
                          aria-labelledby="step-1-tab" tabindex="0">
-                        <h3>Configuração de Jurisdição</h3>
-                        <p class="muted">Configure a jurisdição e corpus para pesquisa legal.</p>
-                        
-                        <div class="grid2">
-                            <div class="form-field">
-                                <label for="language" class="required">Idioma:</label>
-                                <select id="language" required aria-describedby="language-help">
-                                    <option value="pt-BR">Português (Brasil)</option>
-                                    <option value="en-US">English (US)</option>
-                                    <option value="es-ES">Español</option>
-                                </select>
-                                <div id="language-help" class="help-text">Selecione o idioma para a interface e documentos</div>
-                                <div class="error-message" role="alert">Por favor, selecione um idioma</div>
-                            </div>
-                            <div class="form-field">
-                                <label for="country" class="required">País:</label>
-                                <select id="country" required aria-describedby="country-help">
-                                    <option value="br">Brasil</option>
-                                    <option value="us">Estados Unidos</option>
-                                    <option value="es">Espanha</option>
-                                </select>
-                                <div id="country-help" class="help-text">País da jurisdição legal</div>
-                                <div class="error-message" role="alert">Por favor, selecione um país</div>
-                            </div>
-                        </div>
-                        
-                        <div class="grid2">
-                            <div class="form-field">
-                                <label for="state">Estado/Província:</label>
-                                <input type="text" id="state" placeholder="ex: RS" 
-                                       aria-describedby="state-help">
-                                <div id="state-help" class="help-text">Código do estado ou província (ex: RS, SP, RJ)</div>
-                                <div class="error-message" role="alert">Estado inválido</div>
-                            </div>
-                            <div class="form-field">
-                                <label for="city">Cidade:</label>
-                                <input type="text" id="city" placeholder="ex: Porto Alegre"
-                                       aria-describedby="city-help">
-                                <div id="city-help" class="help-text">Cidade da jurisdição (opcional)</div>
-                                <div class="error-message" role="alert">Cidade inválida</div>
-                            </div>
-                        </div>
-                        
-                        <div class="form-field">
-                            <label for="corpus-url" class="required">URL Base do Corpus:</label>
-                            <input type="url" id="corpus-url" required
-                                   placeholder="https://raw.githubusercontent.com/org/legal-corpus/main"
-                                   aria-describedby="corpus-url-help">
-                            <div id="corpus-url-help" class="help-text">URL base do repositório de documentos legais</div>
-                            <div class="error-message" role="alert">URL inválida ou obrigatória</div>
-                        </div>
-                        
-                        <div class="text-center mt-2">
-                            <button id="save-jurisdiction" class="primary">
-                                Salvar e Continuar
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Step 2: Document Search -->
-                    <div id="step-2" class="step-content" role="tabpanel" 
-                         aria-labelledby="step-2-tab" tabindex="0" aria-hidden="true">
                         <h3>Pesquisa de Documentos</h3>
                         <p class="muted">Selecione documentos e artigos para análise.</p>
                         
@@ -190,14 +128,13 @@
                         </div>
                         
                         <div class="text-center mt-2">
-                            <button id="prev-step-2" class="secondary">Anterior</button>
-                            <button id="next-step-2" class="primary">Próximo</button>
+                            <button id="next-step-1" class="primary">Próximo</button>
                         </div>
                     </div>
                     
-                    <!-- Step 3: Prompt Studio -->
-                    <div id="step-3" class="step-content" role="tabpanel" 
-                         aria-labelledby="step-3-tab" tabindex="0" aria-hidden="true">
+                    <!-- Step 2: Prompt Studio -->
+                    <div id="step-2" class="step-content" role="tabpanel" 
+                         aria-labelledby="step-2-tab" tabindex="0" aria-hidden="true">
                         <h3>Prompt Studio</h3>
                         <p class="muted">Configure e execute prompts com IA.</p>
                         
@@ -230,7 +167,7 @@
                         </div>
                         
                         <div class="text-center mt-2">
-                            <button id="prev-step-3" class="secondary">Anterior</button>
+                            <button id="prev-step-2" class="secondary">Anterior</button>
                             <button id="copy-result" class="primary">Copiar Resultado</button>
                         </div>
                     </div>
@@ -300,19 +237,14 @@
                     </div>
                 </div>
                 
-                <div class="grid2">
-                    <div class="form-field">
-                        <label for="settings-city">Cidade:</label>
-                        <input type="text" id="settings-city" placeholder="ex: Porto Alegre">
-                        <div class="error-message">Cidade inválida</div>
-                    </div>
-                    <div class="form-field">
-                        <label for="settings-corpus-url">URL Base do Corpus:</label>
-                        <input type="url" id="settings-corpus-url" 
-                               placeholder="https://raw.githubusercontent.com/org/legal-corpus/main">
-                        <div class="error-message">URL inválida</div>
-                    </div>
+                <div class="form-field">
+                    <label for="settings-city">Cidade:</label>
+                    <input type="text" id="settings-city" placeholder="ex: Porto Alegre">
+                    <div class="error-message">Cidade inválida</div>
                 </div>
+                
+                <!-- Hidden field for Base URL - managed internally -->
+                <input type="hidden" id="settings-corpus-url">
                 
                 <h4>Integração Externa</h4>
                 <div class="form-field mb-1">
