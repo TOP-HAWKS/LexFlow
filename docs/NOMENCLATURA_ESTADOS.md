@@ -18,7 +18,6 @@ A nomenclatura de estados/províncias foi padronizada para usar **códigos/prefi
 
 ### Interface do Usuário
 - `src/ui/app.html` - Placeholders e textos de ajuda
-- `src/ui/jurisdiction.html` - Seletor de estado
 - `src/ui/search_toc.html` - Caminhos de documentos
 
 ### Testes
