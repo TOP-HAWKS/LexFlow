@@ -1128,6 +1128,13 @@ class LexFlowApp {
      */
     async init() {
         try {
+            // Ensure DOM is fully loaded before initializing
+            if (document.readyState === 'loading') {
+                await new Promise(resolve => {
+                    document.addEventListener('DOMContentLoaded', resolve, { once: true });
+                });
+            }
+
             this.initRouter();
             this.initEventListeners();
             this.initToastSystem();
@@ -1139,6 +1146,13 @@ class LexFlowApp {
             await this.loadConfigurationDefaults();
 
             this.loadInitialView();
+
+            // Force initialization of home view if we're on home
+            if (this.currentView === 'home' || !this.currentView) {
+                setTimeout(() => {
+                    this.initHomeView();
+                }, 100);
+            }
 
             console.log('LexFlow SPA initialized');
         } catch (error) {
@@ -1217,6 +1231,13 @@ class LexFlowApp {
                 this.initViewFunctionality(viewName).then(() => {
                     // Remove loading state
                     document.body.classList.remove('loading');
+
+                    // Double-check home view initialization for first load
+                    if (viewName === 'home') {
+                        setTimeout(() => {
+                            this.ensureHomeViewInitialized();
+                        }, 100);
+                    }
 
                     // Performance logging
                     const loadTime = performance.now() - startTime;
@@ -1451,6 +1472,38 @@ class LexFlowApp {
     }
 
     /**
+     * Ensure home view is properly initialized with working event listeners
+     */
+    ensureHomeViewInitialized() {
+        // Check if we're on home view and if feature cards exist
+        if (this.currentView !== 'home') return;
+
+        const featureCards = document.querySelectorAll('.feature-card[data-navigate]');
+        if (featureCards.length === 0) {
+            console.log('No feature cards found, retrying home view initialization...');
+            setTimeout(() => this.initHomeView(), 100);
+            return;
+        }
+
+        // Simple test: try to trigger a click event and see if it works
+        // We'll add a temporary test attribute to verify listeners are working
+        let hasWorkingListeners = false;
+        featureCards.forEach(card => {
+            if (card.onclick || card.addEventListener.toString().includes('native code')) {
+                hasWorkingListeners = true;
+            }
+        });
+
+        // If no working listeners detected, reinitialize
+        if (!hasWorkingListeners) {
+            console.log('Home view event listeners not working, reinitializing...');
+            this.initHomeView();
+        } else {
+            console.log('Home view event listeners are working correctly');
+        }
+    }
+
+    /**
      * Initialize view-specific functionality with performance optimization
      * @param {string} viewName - The view being initialized
      * @returns {Promise} - Promise that resolves when initialization is complete
@@ -1485,34 +1538,149 @@ class LexFlowApp {
      * Initialize home view functionality
      */
     initHomeView() {
-        // Feature card navigation with enhanced feedback
-        document.querySelectorAll('.feature-card[data-navigate]').forEach(card => {
-            card.addEventListener('click', (e) => {
-                const target = e.currentTarget.dataset.navigate;
-                const title = e.currentTarget.querySelector('.feature-title').textContent;
+        console.log('Initializing home view...');
+        
+        // Use a more robust approach to ensure event listeners are attached
+        const attachHomeListeners = () => {
+            // Feature card navigation with enhanced feedback
+            const featureCards = document.querySelectorAll('.feature-card[data-navigate]');
+            console.log(`Found ${featureCards.length} feature cards`);
+            
+            featureCards.forEach((card, index) => {
+                // Remove any existing click handlers by cloning the element
+                const newCard = card.cloneNode(true);
+                card.parentNode.replaceChild(newCard, card);
+                
+                console.log(`Attaching listener to card ${index + 1}: ${newCard.dataset.navigate}`);
+                
+                newCard.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const target = e.currentTarget.dataset.navigate;
+                    const title = e.currentTarget.querySelector('.feature-title').textContent;
 
-                // Add visual feedback
-                card.style.transform = 'scale(0.98)';
+                    console.log(`Feature card clicked: ${target}`);
+
+                    // Add visual feedback
+                    newCard.style.transform = 'scale(0.98)';
+                    setTimeout(() => {
+                        newCard.style.transform = '';
+                    }, 150);
+
+                    // Show navigation toast
+                    this.showToast(`Navegando para ${title}`, 'info', 1500);
+
+                    // Navigate after brief delay for better UX
+                    setTimeout(() => {
+                        this.navigate(target);
+                    }, 200);
+                });
+
+                // Also add keyboard support
+                newCard.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        newCard.click();
+                    }
+                });
+
+                // Make it focusable
+                newCard.setAttribute('tabindex', '0');
+                newCard.setAttribute('role', 'button');
+            });
+
+            // Settings button functionality
+            const settingsButton = document.getElementById('settings-button');
+            if (settingsButton) {
+                console.log('Attaching listener to settings button');
+                
+                // Remove existing listener to prevent duplicates
+                const newSettingsButton = settingsButton.cloneNode(true);
+                settingsButton.parentNode.replaceChild(newSettingsButton, settingsButton);
+                
+                newSettingsButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    console.log('Settings button clicked');
+                    this.showModal('settings');
+                });
+            }
+        };
+
+        // Try multiple times to ensure DOM is ready
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        const tryAttach = () => {
+            attempts++;
+            const featureCards = document.querySelectorAll('.feature-card[data-navigate]');
+            
+            if (featureCards.length > 0) {
+                attachHomeListeners();
+                console.log('Home view listeners attached successfully');
+                
+                // Verify listeners are working by testing one
                 setTimeout(() => {
-                    card.style.transform = '';
-                }, 150);
-
-                // Show navigation toast
-                this.showToast(`Navegando para ${title}`, 'info', 1500);
-
-                // Navigate after brief delay for better UX
-                setTimeout(() => {
-                    this.navigate(target);
+                    this.verifyHomeListeners();
                 }, 200);
-            });
-        });
+            } else if (attempts < maxAttempts) {
+                console.log(`Attempt ${attempts}: Feature cards not found, retrying in 100ms...`);
+                setTimeout(tryAttach, 100);
+            } else {
+                console.error('Failed to find feature cards after maximum attempts');
+                // Try one more time with a longer delay
+                setTimeout(() => {
+                    const cards = document.querySelectorAll('.feature-card[data-navigate]');
+                    if (cards.length > 0) {
+                        console.log('Found cards on final attempt, attaching listeners...');
+                        attachHomeListeners();
+                    }
+                }, 1000);
+            }
+        };
 
-        // Settings button functionality
-        const settingsButton = document.getElementById('settings-button');
-        if (settingsButton) {
-            settingsButton.addEventListener('click', () => {
-                this.showModal('settings');
+        tryAttach();
+    }
+
+    /**
+     * Verify that home view listeners are working correctly
+     */
+    verifyHomeListeners() {
+        const featureCards = document.querySelectorAll('.feature-card[data-navigate]');
+        let workingListeners = 0;
+        
+        featureCards.forEach((card, index) => {
+            // Create a test click event
+            const testEvent = new MouseEvent('click', {
+                bubbles: true,
+                cancelable: true,
+                view: window
             });
+            
+            // Add a temporary flag to detect if our listener fired
+            let listenerFired = false;
+            const testListener = () => {
+                listenerFired = true;
+            };
+            
+            card.addEventListener('click', testListener, { once: true });
+            card.dispatchEvent(testEvent);
+            
+            if (listenerFired) {
+                workingListeners++;
+            }
+            
+            // Clean up test listener
+            card.removeEventListener('click', testListener);
+        });
+        
+        console.log(`Home view verification: ${workingListeners}/${featureCards.length} listeners working`);
+        
+        if (workingListeners === 0 && featureCards.length > 0) {
+            console.warn('No working listeners detected, attempting to reinitialize...');
+            setTimeout(() => {
+                this.initHomeView();
+            }, 500);
         }
     }
 
@@ -4902,23 +5070,37 @@ ${outputArea.value}
      * Initialize event listeners with keyboard navigation support
      */
     initEventListeners() {
-        // Navigation tabs with keyboard support
-        document.querySelectorAll('.nav-tab[data-view]').forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                e.preventDefault();
-                const view = e.currentTarget.dataset.view;
-                this.navigate(view);
-            });
-
-            // Keyboard navigation for tabs
-            tab.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
+        // Ensure DOM is ready before adding event listeners
+        const initializeNavListeners = () => {
+            // Navigation tabs with keyboard support
+            document.querySelectorAll('.nav-tab[data-view]').forEach(tab => {
+                tab.addEventListener('click', (e) => {
                     e.preventDefault();
                     const view = e.currentTarget.dataset.view;
                     this.navigate(view);
-                }
+                });
+
+                // Keyboard navigation for tabs
+                tab.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        const view = e.currentTarget.dataset.view;
+                        this.navigate(view);
+                    }
+                });
             });
-        });
+        };
+
+        // Check if nav tabs exist, if not wait a bit
+        const navTabs = document.querySelectorAll('.nav-tab[data-view]');
+        if (navTabs.length === 0) {
+            // Wait for DOM to be ready and try again
+            setTimeout(() => {
+                initializeNavListeners();
+            }, 50);
+        } else {
+            initializeNavListeners();
+        }
 
         // Global keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -5799,6 +5981,12 @@ ${outputArea.value}
         const hash = window.location.hash.slice(1);
         if (!hash) {
             this.navigate('home');
+            // Ensure home view is properly initialized after navigation
+            setTimeout(() => {
+                if (this.currentView === 'home') {
+                    this.initHomeView();
+                }
+            }, 200);
         }
     }
 
@@ -6390,7 +6578,18 @@ ${outputArea.value}
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    window.app = new LexFlowApp();
+    // Add a small delay to ensure all modules are loaded
+    setTimeout(() => {
+        window.app = new LexFlowApp();
+        
+        // Additional check for home view initialization after app is created
+        setTimeout(() => {
+            if (window.app && window.app.currentView === 'home') {
+                console.log('Double-checking home view initialization...');
+                window.app.initHomeView();
+            }
+        }, 500);
+    }, 100);
 });
 
 // Export for global access
