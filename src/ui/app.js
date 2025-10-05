@@ -1035,6 +1035,9 @@ class LexFlowApp {
             // Load settings on startup
             await this.loadSettings();
 
+            // Load configuration defaults if needed
+            await this.loadConfigurationDefaults();
+
             this.loadInitialView();
 
             console.log('LexFlow SPA initialized');
@@ -1430,20 +1433,46 @@ class LexFlowApp {
             this.hideToast(loadingToastId);
             const configLoadingId = this.showLoadingToast('Carregando configurações...');
 
+            // Validate configuration before proceeding
+            const configValidation = await this.validateRequiredSettings();
+            
+            if (!configValidation.isValid) {
+                this.hideToast(configLoadingId);
+                console.log('Configuration incomplete, showing banner:', configValidation.missing);
+                
+                // Show configuration banner for missing settings
+                this.showConfigurationBanner(configValidation.missing);
+                
+                // Auto-trigger settings modal if no settings exist at all
+                if (!configValidation.settings) {
+                    await this.triggerSettingsModalForIncompleteConfig(configValidation.missing);
+                }
+            } else {
+                // Remove any existing configuration banner
+                this.removeConfigurationBanner();
+                
+                this.hideToast(configLoadingId);
+                console.log('Configuration valid, proceeding with workspace initialization');
+            }
+
             // Step 1: Document search (now the first step)
             this.initDocumentSearchStep();
 
             // Step 2: Prompt studio (lazy load)
             this.initPromptStudioStep();
 
-            this.hideToast(configLoadingId);
             const integrationLoadingId = this.showLoadingToast('Testando integrações...');
 
             // Test integrations
             await this.testIntegrations();
 
             this.hideToast(integrationLoadingId);
-            this.showToast('Workspace pronto!', 'success', 2000);
+            
+            if (configValidation.isValid) {
+                this.showToast('Workspace pronto!', 'success', 2000);
+            } else {
+                this.showToast('Workspace carregado. Complete a configuração para usar todas as funcionalidades.', 'warning', 4000);
+            }
 
         } catch (error) {
             this.hideToast(loadingToastId);
@@ -4567,6 +4596,12 @@ ${outputArea.value}
             this.saveSettings();
         });
 
+        // Workspace settings button
+        document.getElementById('workspace-settings-btn')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.showModal('settings');
+        });
+
         // Real-time validation for settings form
         this.initSettingsFormValidation();
 
@@ -4764,6 +4799,11 @@ ${outputArea.value}
             // Update jurisdiction fields in workspace if they're empty
             this.updateWorkspaceFromSettings(settings);
 
+            // Refresh workspace configuration if currently in workspace view
+            if (this.currentView === 'workspace') {
+                await this.refreshWorkspaceConfiguration(settings);
+            }
+
         } catch (error) {
             console.error('Error saving settings:', error);
             this.showToast('Erro ao salvar configurações', 'error');
@@ -4864,6 +4904,44 @@ ${outputArea.value}
         }
         if (corpusField && !corpusField.value && settings.corpusUrl) {
             corpusField.value = settings.corpusUrl;
+        }
+    }
+
+    /**
+     * Refresh workspace configuration after settings are saved
+     * @param {Object} settings - The updated settings object
+     */
+    async refreshWorkspaceConfiguration(settings) {
+        try {
+            console.log('Refreshing workspace configuration with new settings:', settings);
+            
+            // Re-validate configuration
+            const configValidation = await this.validateRequiredSettings();
+            
+            if (configValidation.isValid) {
+                // Remove configuration banner if it exists
+                this.removeConfigurationBanner();
+                
+                // Show success message
+                this.showToast('Configuração atualizada! Recarregando documentos...', 'success', 3000);
+                
+                // Reload document list if we're on step 1
+                if (this.currentStep === 1) {
+                    try {
+                        await this.loadAvailableDocuments();
+                    } catch (error) {
+                        console.warn('Failed to reload documents after configuration update:', error);
+                        this.showToast('Configuração salva, mas houve erro ao recarregar documentos', 'warning', 4000);
+                    }
+                }
+            } else {
+                // Still missing some configuration, show banner
+                this.showConfigurationBanner(configValidation.missing);
+            }
+            
+        } catch (error) {
+            console.error('Error refreshing workspace configuration:', error);
+            this.showToast('Configuração salva, mas houve erro ao atualizar o workspace', 'warning', 4000);
         }
     }
 
@@ -4975,6 +5053,240 @@ ${outputArea.value}
     }
 
     /**
+     * Load configuration defaults from defaults.js when settings are missing
+     */
+    async loadConfigurationDefaults() {
+        try {
+            // Import defaults dynamically
+            const { DEFAULT_CONFIG, getDefaultBaseUrl } = await import('../config/defaults.js');
+            
+            // Check if we need to load defaults
+            const currentSettings = await getSetting('app-settings');
+            
+            if (!currentSettings || !currentSettings.language || !currentSettings.country) {
+                console.log('Loading configuration defaults...');
+                
+                // Create default settings object
+                const defaultSettings = {
+                    language: DEFAULT_CONFIG.language,
+                    country: DEFAULT_CONFIG.defaultCountry,
+                    baseUrl: getDefaultBaseUrl(DEFAULT_CONFIG.defaultCountry),
+                    ...currentSettings // Preserve any existing settings
+                };
+                
+                // Save defaults to IndexedDB
+                await setSetting('app-settings', defaultSettings);
+                
+                console.log('Configuration defaults loaded:', defaultSettings);
+                return defaultSettings;
+            }
+            
+            // If baseUrl is missing but country exists, set the appropriate baseUrl
+            if (currentSettings && currentSettings.country && !currentSettings.baseUrl) {
+                currentSettings.baseUrl = getDefaultBaseUrl(currentSettings.country);
+                await setSetting('app-settings', currentSettings);
+                console.log('Base URL set from defaults for country:', currentSettings.country);
+            }
+            
+            return currentSettings;
+        } catch (error) {
+            console.error('Error loading configuration defaults:', error);
+            this.handleGlobalError(error, 'Configuration defaults loading');
+            return null;
+        }
+    }
+
+    /**
+     * Validate required configuration settings
+     * @returns {Object} Validation result with isValid flag and missing settings
+     */
+    async validateRequiredSettings() {
+        try {
+            const settings = await getSetting('app-settings');
+            const missing = [];
+            
+            // Check required settings
+            if (!settings) {
+                return {
+                    isValid: false,
+                    missing: ['language', 'country', 'baseUrl'],
+                    settings: null
+                };
+            }
+            
+            if (!settings.language) {
+                missing.push('language');
+            }
+            
+            if (!settings.country) {
+                missing.push('country');
+            }
+            
+            if (!settings.baseUrl) {
+                missing.push('baseUrl');
+            }
+            
+            const isValid = missing.length === 0;
+            
+            console.debug('Configuration validation:', {
+                isValid,
+                missing,
+                hasSettings: !!settings
+            });
+            
+            return {
+                isValid,
+                missing,
+                settings
+            };
+        } catch (error) {
+            console.error('Error validating configuration:', error);
+            return {
+                isValid: false,
+                missing: ['language', 'country', 'baseUrl'],
+                settings: null,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Show configuration banner for incomplete settings
+     * @param {Array} missingSettings - Array of missing setting names
+     */
+    showConfigurationBanner(missingSettings) {
+        // Remove any existing configuration banner
+        this.removeConfigurationBanner();
+        
+        // Create banner element
+        const banner = document.createElement('div');
+        banner.id = 'configuration-banner';
+        banner.className = 'configuration-banner warning-banner';
+        banner.setAttribute('role', 'alert');
+        banner.setAttribute('aria-live', 'polite');
+        
+        const missingText = missingSettings.length > 1 
+            ? `configurações obrigatórias (${missingSettings.join(', ')})` 
+            : `configuração obrigatória (${missingSettings[0]})`;
+        
+        banner.innerHTML = `
+            <div class="banner-content">
+                <div class="banner-icon">⚠️</div>
+                <div class="banner-message">
+                    <strong>Configuração incompleta</strong><br>
+                    Faltam ${missingText} para carregar os documentos.
+                </div>
+                <button class="banner-action" id="open-settings-from-banner">
+                    Abrir Configurações
+                </button>
+                <button class="banner-close" id="close-configuration-banner" aria-label="Fechar aviso">
+                    ×
+                </button>
+            </div>
+        `;
+        
+        // Insert banner at the top of workspace content
+        const workspaceContent = document.querySelector('#workspace-view .workspace-content');
+        if (workspaceContent) {
+            workspaceContent.insertBefore(banner, workspaceContent.firstChild);
+        }
+        
+        // Add event listeners
+        const openSettingsBtn = banner.querySelector('#open-settings-from-banner');
+        const closeBannerBtn = banner.querySelector('#close-configuration-banner');
+        
+        if (openSettingsBtn) {
+            openSettingsBtn.addEventListener('click', () => {
+                this.showModal('settings');
+            });
+        }
+        
+        if (closeBannerBtn) {
+            closeBannerBtn.addEventListener('click', () => {
+                this.removeConfigurationBanner();
+            });
+        }
+        
+        // Disable document controls while configuration is incomplete
+        this.disableDocumentControls();
+        
+        console.log('Configuration banner shown for missing settings:', missingSettings);
+    }
+
+    /**
+     * Remove configuration banner
+     */
+    removeConfigurationBanner() {
+        const banner = document.getElementById('configuration-banner');
+        if (banner) {
+            banner.remove();
+            console.log('Configuration banner removed');
+        }
+        
+        // Re-enable document controls
+        this.enableDocumentControls();
+    }
+
+    /**
+     * Disable document controls when configuration is incomplete
+     */
+    disableDocumentControls() {
+        const documentSelect = document.getElementById('document-select');
+        const searchInput = document.getElementById('search-term');
+        
+        if (documentSelect) {
+            documentSelect.disabled = true;
+            documentSelect.innerHTML = '<option value="">Configure as configurações primeiro...</option>';
+        }
+        
+        if (searchInput) {
+            searchInput.disabled = true;
+            searchInput.placeholder = 'Configure as configurações primeiro...';
+        }
+        
+        console.log('Document controls disabled due to incomplete configuration');
+    }
+
+    /**
+     * Enable document controls when configuration is complete
+     */
+    enableDocumentControls() {
+        const documentSelect = document.getElementById('document-select');
+        const searchInput = document.getElementById('search-term');
+        
+        if (documentSelect) {
+            documentSelect.disabled = false;
+        }
+        
+        if (searchInput) {
+            searchInput.disabled = false;
+            searchInput.placeholder = 'Digite um termo para buscar';
+        }
+        
+        console.log('Document controls enabled');
+    }
+
+    /**
+     * Trigger settings modal automatically when configuration is incomplete
+     * @param {Array} missingSettings - Array of missing setting names
+     */
+    async triggerSettingsModalForIncompleteConfig(missingSettings) {
+        console.log('Auto-triggering settings modal for incomplete configuration:', missingSettings);
+        
+        // Show a toast explaining why settings modal is opening
+        this.showToast(
+            'Abrindo configurações para completar a configuração obrigatória...',
+            'info',
+            3000
+        );
+        
+        // Wait a moment for the toast to be visible
+        setTimeout(() => {
+            this.showModal('settings');
+        }, 500);
+    }
+
+    /**
      * Initialize real-time validation for settings form
      */
     initSettingsFormValidation() {
@@ -4994,6 +5306,13 @@ ${outputArea.value}
                 if (fieldId === 'settings-serverless-endpoint') {
                     field.addEventListener('input', () => {
                         this.validateServerlessEndpointRealTime(field);
+                    });
+                }
+
+                // Auto-set baseUrl when country changes
+                if (fieldId === 'settings-country') {
+                    field.addEventListener('change', async () => {
+                        await this.updateBaseUrlFromCountry(field.value);
                     });
                 }
 
@@ -5088,6 +5407,32 @@ ${outputArea.value}
         } else if (value) {
             // Only show success for non-empty fields
             formField.classList.add('success');
+        }
+    }
+
+    /**
+     * Update base URL when country selection changes
+     * @param {string} countryCode - The selected country code
+     */
+    async updateBaseUrlFromCountry(countryCode) {
+        if (!countryCode) return;
+        
+        try {
+            // Import defaults dynamically
+            const { getDefaultBaseUrl } = await import('../config/defaults.js');
+            
+            // Get the default base URL for the selected country
+            const baseUrl = getDefaultBaseUrl(countryCode);
+            
+            // Update the hidden corpus URL field
+            const corpusUrlField = document.getElementById('settings-corpus-url');
+            if (corpusUrlField) {
+                corpusUrlField.value = baseUrl;
+                console.log(`Base URL updated for country ${countryCode}:`, baseUrl);
+            }
+            
+        } catch (error) {
+            console.error('Error updating base URL from country:', error);
         }
     }
 

@@ -765,3 +765,136 @@ button.outline:hover:not(:disabled) {
 .mb-2 { margin-bottom: 2rem; }
 .mt-1 { margin-top: 1rem; }
 .mt-2 { margin-top: 2rem; }
+
+/* Configuration Banner Styles */
+.configuration-banner {
+    background: var(--pico-color-amber-500);
+    color: white;
+    border-radius: var(--pico-border-radius);
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+    animation: slideIn 0.3s ease-out;
+}
+
+.warning-banner {
+    background: linear-gradient(135deg, var(--pico-color-amber-500), #f97316);
+}
+
+.banner-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+}
+
+.banner-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.banner-message {
+    flex: 1;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.banner-message strong {
+    font-weight: var(--pico-font-weight-bold);
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.banner-action {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 0.5rem 1rem;
+    border-radius: calc(var(--pico-border-radius) * 0.75);
+    font-size: 0.8rem;
+    font-weight: var(--pico-font-weight-bold);
+    cursor: pointer;
+    transition: var(--pico-transition);
+    white-space: nowrap;
+}
+
+.banner-action:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-1px);
+}
+
+.banner-action:focus {
+    outline: 2px solid white;
+    outline-offset: 2px;
+}
+
+.banner-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--pico-transition);
+    flex-shrink: 0;
+}
+
+.banner-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.banner-close:focus {
+    outline: 2px solid white;
+    outline-offset: 2px;
+}
+
+/* Dark mode adjustments for banner */
+@media (prefers-color-scheme: dark) {
+    .configuration-banner {
+        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+    }
+    
+    .banner-action {
+        background: rgba(0, 0, 0, 0.2);
+        border-color: rgba(0, 0, 0, 0.3);
+    }
+    
+    .banner-action:hover {
+        background: rgba(0, 0, 0, 0.3);
+        border-color: rgba(0, 0, 0, 0.5);
+    }
+    
+    .banner-close:hover {
+        background: rgba(0, 0, 0, 0.2);
+    }
+}
+
+/* High contrast mode support for banner */
+@media (prefers-contrast: high) {
+    .configuration-banner {
+        border: 2px solid var(--pico-color-amber-500);
+    }
+    
+    .banner-action {
+        border-width: 2px;
+    }
+}
+
+/* Reduced motion support for banner */
+@media (prefers-reduced-motion: reduce) {
+    .configuration-banner {
+        animation: none;
+    }
+    
+    .banner-action:hover,
+    .banner-close:hover {
+        transform: none;
+    }
+}
