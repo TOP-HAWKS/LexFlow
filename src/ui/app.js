@@ -2003,9 +2003,6 @@ class LexFlowApp {
                 if (value && !this.isValidUrl(value)) {
                     isValid = false;
                     errorMessage = 'URL inválida. Use formato: https://exemplo.com';
-                } else if (value && !value.includes('github')) {
-                    // Warning for non-GitHub URLs
-                    this.showFieldWarning(field, 'Recomendado usar repositório GitHub');
                 }
                 break;
         }
@@ -3896,9 +3893,7 @@ ${outputArea.value}
                     <button type="button" class="secondary" onclick="app.previewMarkdown()">
                         👁️ Visualizar Markdown
                     </button>
-                    <button type="button" class="secondary" onclick="app.createGitHubIssue()">
-                        🐙 Criar Issue GitHub
-                    </button>
+
                     <button type="button" class="secondary" onclick="app.deleteQueueItem(${item.id})">
                         🗑️ Excluir Item
                     </button>
@@ -4792,6 +4787,10 @@ ${outputArea.value}
 
     /**
      * Load application settings
+     * 
+     * Migration Note: Legacy github-token settings are intentionally ignored.
+     * Existing users will need to configure the new serverless endpoint.
+     * This approach ensures security by not migrating sensitive tokens.
      */
     async loadSettings() {
         try {
@@ -4809,10 +4808,30 @@ ${outputArea.value}
                 const saved = localStorage.getItem('lexflow-settings');
                 if (saved) {
                     settings = JSON.parse(saved);
+                    
+                    // Migration: Remove any legacy github-token from loaded settings
+                    // This ensures old token data doesn't cause issues
+                    if (settings && settings['github-token']) {
+                        delete settings['github-token'];
+                        console.log('Removed legacy github-token from settings during migration');
+                    }
                 }
             }
             
             if (settings) {
+                // Migration: Clean up any legacy github-token from settings
+                if (settings['github-token']) {
+                    delete settings['github-token'];
+                    console.log('Removed legacy github-token from IndexedDB settings during migration');
+                    
+                    // Save cleaned settings back to storage
+                    try {
+                        await setSetting('app-settings', settings);
+                    } catch (error) {
+                        console.warn('Failed to save cleaned settings:', error);
+                    }
+                }
+                
                 // Populate settings form
                 document.getElementById('settings-language').value = settings.language || 'pt-BR';
                 document.getElementById('settings-country').value = settings.country || '';
@@ -4873,15 +4892,7 @@ ${outputArea.value}
         }
     }
 
-    /**
-     * Validate GitHub token format
-     * @param {string} token - GitHub token to validate
-     * @returns {boolean} - True if valid GitHub token format
-     */
-    isValidGitHubToken(token) {
-        // GitHub tokens start with ghp_ (personal access tokens) or github_pat_ (fine-grained tokens)
-        return token.startsWith('ghp_') || token.startsWith('github_pat_');
-    }
+
 
     /**
      * Validate HTTPS URL format
@@ -5390,94 +5401,7 @@ ${outputArea.value}
         
         document.head.appendChild(style);
     } 
-   /**
-     * Create GitHub issue with markdown content
-     */
-    async createGitHubIssue() {
-        if (!this.selectedQueueItem) {
-            this.showToast('Nenhum item selecionado', 'error');
-            return;
-        }
 
-        // Validate form first
-        const fields = ['edit-title', 'edit-content'];
-        let isValid = true;
-        
-        fields.forEach(fieldId => {
-            if (!this.validateEditorField(fieldId)) {
-                isValid = false;
-            }
-        });
-
-        if (!isValid) {
-            this.showToast('Por favor, corrija os erros obrigatórios no formulário', 'error');
-            return;
-        }
-
-        try {
-            // Get GitHub settings
-            const githubToken = await this.getGitHubToken();
-            const githubRepo = await this.getGitHubRepo();
-            
-            if (!githubToken || !githubRepo) {
-                this.showGitHubConfigModal();
-                return;
-            }
-
-            // Get current form data
-            const formData = {
-                title: document.getElementById('edit-title').value.trim(),
-                jurisdiction: document.getElementById('edit-jurisdiction').value.trim(),
-                lang: document.getElementById('edit-language').value,
-                url: document.getElementById('edit-source-url').value.trim(),
-                versionDate: document.getElementById('edit-version-date').value,
-                content: document.getElementById('edit-content').value.trim()
-            };
-
-            // Generate markdown
-            const { buildMarkdown } = await import('../util/md-builder.js');
-            
-            const markdownData = {
-                title: formData.title,
-                jurisdiction: formData.jurisdiction,
-                language: formData.lang,
-                sourceUrl: formData.url,
-                versionDate: formData.versionDate || new Date().toISOString().split('T')[0],
-                content: formData.content
-            };
-
-            const markdown = buildMarkdown(markdownData);
-            
-            // Create GitHub issue
-            await this.submitToGitHub(githubToken, githubRepo, formData, markdown);
-
-        } catch (error) {
-            console.error('Error creating GitHub issue:', error);
-            this.showToast('Erro ao criar issue no GitHub', 'error');
-        }
-    }
-
-    /**
-     * Get GitHub token from settings
-     * @returns {string|null} - GitHub token or null
-     */
-    async getGitHubToken() {
-        try {
-            try {
-                return await getSetting('github-token');
-            } catch (error) {
-                console.warn('Failed to load GitHub token from IndexedDB:', error);
-                const settings = localStorage.getItem('lexflow-settings');
-                if (settings) {
-                    const parsed = JSON.parse(settings);
-                    return parsed.githubToken;
-                }
-            }
-        } catch (error) {
-            console.error('Error getting GitHub token:', error);
-        }
-        return null;
-    }
 
     /**
      * Get serverless endpoint from settings
@@ -5503,339 +5427,21 @@ ${outputArea.value}
         return null;
     }
 
-    /**
-     * Get GitHub repository from settings
-     * @returns {string|null} - GitHub repository or null
-     */
-    async getGitHubRepo() {
-        try {
-            try {
-                return await getSetting('github-repo');
-            } catch (error) {
-                console.warn('Failed to load GitHub repo from IndexedDB:', error);
-                const settings = localStorage.getItem('lexflow-settings');
-                if (settings) {
-                    const parsed = JSON.parse(settings);
-                    return parsed.githubRepo;
-                }
-            }
-        } catch (error) {
-            console.error('Error getting GitHub repo:', error);
-        }
-        return null;
-    }
 
-    /**
-     * Show GitHub configuration modal
-     */
-    showGitHubConfigModal() {
-        // Create modal if it doesn't exist
-        if (!document.getElementById('github-config-modal')) {
-            const modalHtml = `
-                <div id="github-config-modal" class="modal-overlay">
-                    <div class="modal">
-                        <div class="modal-header">
-                            <h3>Configuração do GitHub</h3>
-                            <button class="modal-close" onclick="app.hideModal('github-config')">&times;</button>
-                        </div>
-                        <div class="modal-content">
-                            <p>Para criar issues no GitHub, você precisa configurar:</p>
-                            
-                            <form id="github-config-form">
-                                <div class="form-field mb-1">
-                                    <label for="github-token-input">Token do GitHub:</label>
-                                    <input type="password" id="github-token-input" 
-                                           placeholder="ghp_xxxxxxxxxxxx">
-                                    <small class="muted">
-                                        <a href="https://github.com/settings/tokens" target="_blank">
-                                            Criar token no GitHub
-                                        </a> (permissões: repo, issues)
-                                    </small>
-                                </div>
-                                
-                                <div class="form-field mb-1">
-                                    <label for="github-repo-input">Repositório:</label>
-                                    <input type="text" id="github-repo-input" 
-                                           placeholder="usuario/repositorio">
-                                    <small class="muted">
-                                        Formato: usuario/nome-do-repositorio
-                                    </small>
-                                </div>
-                            </form>
-                        </div>
-                        <div class="modal-actions">
-                            <button type="button" class="primary" onclick="app.saveGitHubConfig()">
-                                Salvar e Continuar
-                            </button>
-                            <button type="button" class="secondary" onclick="app.hideModal('github-config')">
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
-        }
 
-        // Load current settings
-        this.loadGitHubConfigForm();
 
-        // Show modal
-        this.showModal('github-config');
-    }
 
-    /**
-     * Load GitHub configuration into form
-     */
-    async loadGitHubConfigForm() {
-        const tokenInput = document.getElementById('github-token-input');
-        const repoInput = document.getElementById('github-repo-input');
-        
-        if (tokenInput && repoInput) {
-            const token = await this.getGitHubToken();
-            const repo = await this.getGitHubRepo();
-            
-            if (token) tokenInput.value = token;
-            if (repo) repoInput.value = repo;
-        }
-    }
 
-    /**
-     * Save GitHub configuration
-     */
-    async saveGitHubConfig() {
-        const token = document.getElementById('github-token-input').value.trim();
-        const repo = document.getElementById('github-repo-input').value.trim();
 
-        if (!token || !repo) {
-            this.showToast('Por favor, preencha todos os campos', 'error');
-            return;
-        }
 
-        // Validate repository format
-        if (!repo.includes('/') || repo.split('/').length !== 2) {
-            this.showToast('Formato do repositório inválido. Use: usuario/repositorio', 'error');
-            return;
-        }
 
-        try {
-            // Save settings
-            try {
-                await setSetting('github-token', token);
-                await setSetting('github-repo', repo);
-            } catch (error) {
-                console.warn('Failed to save GitHub settings to IndexedDB, using localStorage fallback:', error);
-                const settings = {
-                    githubToken: token,
-                    githubRepo: repo
-                };
-                localStorage.setItem('lexflow-settings', JSON.stringify(settings));
-            }
 
-            this.showToast('Configuração do GitHub salva!', 'success');
-            this.hideModal('github-config');
 
-            // Try to create issue again
-            setTimeout(() => {
-                this.createGitHubIssue();
-            }, 1000);
 
-        } catch (error) {
-            console.error('Error saving GitHub config:', error);
-            this.showToast('Erro ao salvar configuração', 'error');
-        }
-    }
 
-    /**
-     * Submit content to GitHub as an issue
-     * @param {string} token - GitHub token
-     * @param {string} repo - Repository name (user/repo)
-     * @param {Object} formData - Form data
-     * @param {string} markdown - Generated markdown content
-     */
-    async submitToGitHub(token, repo, formData, markdown) {
-        try {
-            // Prepare issue data
-            const issueTitle = `[LexFlow] ${formData.title}`;
-            const issueBody = this.buildGitHubIssueBody(formData, markdown);
-            
-            // GitHub API request
-            const response = await fetch(`https://api.github.com/repos/${repo}/issues`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `token ${token}`,
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/vnd.github.v3+json'
-                },
-                body: JSON.stringify({
-                    title: issueTitle,
-                    body: issueBody,
-                    labels: ['lexflow', 'legal-content', formData.lang || 'pt-BR']
-                })
-            });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`GitHub API error: ${errorData.message || response.statusText}`);
-            }
 
-            const issueData = await response.json();
-            
-            // Update item status to exported
-            await this.updateItemStatus(this.selectedQueueItem.id, 'exported');
-            
-            // Show success message with link
-            this.showGitHubSuccessModal(issueData.html_url, issueData.number);
 
-        } catch (error) {
-            console.error('Error submitting to GitHub:', error);
-            
-            let errorMessage = 'Erro ao criar issue no GitHub';
-            if (error.message.includes('401')) {
-                errorMessage = 'Token do GitHub inválido ou expirado';
-            } else if (error.message.includes('404')) {
-                errorMessage = 'Repositório não encontrado ou sem permissão';
-            } else if (error.message.includes('422')) {
-                errorMessage = 'Dados inválidos para criação da issue';
-            }
-            
-            this.showToast(errorMessage, 'error');
-        }
-    }
-
-    /**
-     * Build GitHub issue body
-     * @param {Object} formData - Form data
-     * @param {string} markdown - Generated markdown
-     * @returns {string} - Issue body
-     */
-    buildGitHubIssueBody(formData, markdown) {
-        const metadata = [
-            `**Jurisdição:** ${formData.jurisdiction || 'Não especificada'}`,
-            `**Idioma:** ${formData.lang || 'pt-BR'}`,
-            `**URL de Origem:** ${formData.url || 'Não especificada'}`,
-            `**Data da Versão:** ${formData.versionDate || 'Não especificada'}`,
-            `**Capturado em:** ${new Date().toLocaleString('pt-BR')}`
-        ].join('\n');
-
-        return `
-## Conteúdo Legal Capturado via LexFlow
-
-${metadata}
-
----
-
-### Arquivo Markdown Proposto
-
-\`\`\`markdown
-${markdown}
-\`\`\`
-
----
-
-*Esta issue foi criada automaticamente pela extensão LexFlow para submissão de conteúdo legal.*
-        `.trim();
-    }
-
-    /**
-     * Show GitHub success modal
-     * @param {string} issueUrl - GitHub issue URL
-     * @param {number} issueNumber - Issue number
-     */
-    showGitHubSuccessModal(issueUrl, issueNumber) {
-        // Create modal if it doesn't exist
-        if (!document.getElementById('github-success-modal')) {
-            const modalHtml = `
-                <div id="github-success-modal" class="modal-overlay">
-                    <div class="modal">
-                        <div class="modal-header">
-                            <h3>✅ Issue Criada com Sucesso!</h3>
-                            <button class="modal-close" onclick="app.hideModal('github-success')">&times;</button>
-                        </div>
-                        <div id="github-success-content"></div>
-                        <div class="modal-actions">
-                            <button type="button" class="primary" id="open-github-issue">
-                                🔗 Abrir Issue no GitHub
-                            </button>
-                            <button type="button" class="secondary" onclick="app.hideModal('github-success')">
-                                Fechar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
-        }
-
-        // Update content
-        const content = document.getElementById('github-success-content');
-        content.innerHTML = `
-            <div class="success-message">
-                <p>O conteúdo foi enviado com sucesso para o GitHub!</p>
-                <div class="issue-info">
-                    <strong>Issue #${issueNumber}</strong><br>
-                    <code>${issueUrl}</code>
-                </div>
-                <p class="muted">
-                    O item foi marcado como "exportado" na fila de captura.
-                </p>
-            </div>
-        `;
-
-        // Update button action
-        const openButton = document.getElementById('open-github-issue');
-        if (openButton) {
-            openButton.onclick = () => {
-                window.open(issueUrl, '_blank');
-                this.hideModal('github-success');
-            };
-        }
-
-        // Show modal
-        this.showModal('github-success');
-
-        // Add success CSS
-        this.addGitHubSuccessCSS();
-    }
-
-    /**
-     * Add CSS for GitHub success modal
-     */
-    addGitHubSuccessCSS() {
-        if (document.getElementById('github-success-css')) return;
-
-        const style = document.createElement('style');
-        style.id = 'github-success-css';
-        style.textContent = `
-            .success-message {
-                text-align: center;
-                padding: 1rem;
-            }
-            
-            .issue-info {
-                background: var(--pico-card-background-color);
-                border: 1px solid var(--pico-primary-color);
-                border-radius: var(--pico-border-radius);
-                padding: 1rem;
-                margin: 1rem 0;
-                font-family: monospace;
-            }
-            
-            .issue-info strong {
-                color: var(--pico-primary-color);
-                font-size: 1.1rem;
-            }
-            
-            .issue-info code {
-                background: transparent;
-                color: var(--pico-muted-color);
-                font-size: 0.9rem;
-                word-break: break-all;
-            }
-        `;
-        
-        document.head.appendChild(style);
-    }
     
     /**
      * Handle global keyboard shortcuts and navigation
