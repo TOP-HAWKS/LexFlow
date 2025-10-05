@@ -4355,7 +4355,7 @@ ${outputArea.value}
         const state = document.getElementById('settings-state').value;
         const city = document.getElementById('settings-city').value;
         const corpusUrl = document.getElementById('settings-corpus-url').value;
-        const githubToken = document.getElementById('settings-github-token').value;
+        const serverlessEndpoint = document.getElementById('settings-serverless-endpoint').value;
 
         // Clear previous validation states
         document.querySelectorAll('.form-field').forEach(field => {
@@ -4379,9 +4379,9 @@ ${outputArea.value}
             isValid = false;
         }
 
-        // Validate GitHub token format if provided
-        if (githubToken && !this.isValidGitHubToken(githubToken)) {
-            errors.githubToken = 'Token deve começar com "ghp_" ou "github_pat_"';
+        // Validate serverless endpoint URL format if provided
+        if (serverlessEndpoint && !this.isValidHttpsUrl(serverlessEndpoint)) {
+            errors.serverlessEndpoint = 'URL deve começar com "https://"';
             isValid = false;
         }
 
@@ -4412,9 +4412,9 @@ ${outputArea.value}
         });
 
         // Mark valid fields as success
-        ['language', 'country', 'state', 'city', 'corpusUrl', 'githubToken'].forEach(fieldName => {
+        ['language', 'country', 'state', 'city', 'corpusUrl', 'serverlessEndpoint'].forEach(fieldName => {
             if (!errors[fieldName]) {
-                const field = document.getElementById(`settings-${fieldName === 'corpusUrl' ? 'corpus-url' : fieldName === 'githubToken' ? 'github-token' : fieldName}`);
+                const field = document.getElementById(`settings-${fieldName === 'corpusUrl' ? 'corpus-url' : fieldName === 'serverlessEndpoint' ? 'serverless-endpoint' : fieldName}`);
                 if (field && field.value && typeof field.closest === 'function') {
                     const formField = field.closest('.form-field');
                     if (formField) {
@@ -4444,7 +4444,7 @@ ${outputArea.value}
             state: document.getElementById('settings-state').value,
             city: document.getElementById('settings-city').value,
             corpusUrl: document.getElementById('settings-corpus-url').value,
-            githubToken: document.getElementById('settings-github-token').value
+            serverlessEndpoint: document.getElementById('settings-serverless-endpoint').value
         };
 
         // Show loading state
@@ -4509,7 +4509,7 @@ ${outputArea.value}
                 document.getElementById('settings-state').value = settings.state || '';
                 document.getElementById('settings-city').value = settings.city || '';
                 document.getElementById('settings-corpus-url').value = settings.corpusUrl || '';
-                document.getElementById('settings-github-token').value = settings.githubToken || '';
+                document.getElementById('settings-serverless-endpoint').value = settings.serverlessEndpoint || '';
                 
                 return settings;
             }
@@ -4574,6 +4574,20 @@ ${outputArea.value}
     }
 
     /**
+     * Validate HTTPS URL format
+     * @param {string} url - URL to validate
+     * @returns {boolean} - True if valid HTTPS URL
+     */
+    isValidHttpsUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            return urlObj.protocol === 'https:';
+        } catch {
+            return false;
+        }
+    }
+
+    /**
      * Initialize real-time validation for settings form
      */
     initSettingsFormValidation() {
@@ -4583,7 +4597,7 @@ ${outputArea.value}
             'settings-state',
             'settings-city',
             'settings-corpus-url',
-            'settings-github-token'
+            'settings-serverless-endpoint'
         ];
 
         formFields.forEach(fieldId => {
@@ -4662,10 +4676,10 @@ ${outputArea.value}
                 }
                 break;
 
-            case 'settings-github-token':
-                if (value && !this.isValidGitHubToken(value)) {
+            case 'settings-serverless-endpoint':
+                if (value && !this.isValidHttpsUrl(value)) {
                     isValid = false;
-                    errorMessage = 'Token deve começar com "ghp_" ou "github_pat_"';
+                    errorMessage = 'URL deve começar com "https://"';
                 }
                 break;
         }
@@ -5067,6 +5081,30 @@ ${outputArea.value}
             }
         } catch (error) {
             console.error('Error getting GitHub token:', error);
+        }
+        return null;
+    }
+
+    /**
+     * Get serverless endpoint from settings
+     * @returns {string|null} - Serverless endpoint URL or null
+     */
+    async getServerlessEndpoint() {
+        try {
+            // Try to load from current settings structure first
+            const settings = await this.loadSettings();
+            if (settings && settings.serverlessEndpoint) {
+                return settings.serverlessEndpoint;
+            }
+            
+            // Fallback to direct setting lookup
+            try {
+                return await getSetting('serverlessEndpoint');
+            } catch (error) {
+                console.warn('Failed to load serverless endpoint from IndexedDB:', error);
+            }
+        } catch (error) {
+            console.error('Error getting serverless endpoint:', error);
         }
         return null;
     }
