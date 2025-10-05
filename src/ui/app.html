@@ -320,7 +320,11 @@
                     <input type="url" id="settings-serverless-endpoint" 
                            placeholder="https://api.lexflow.cloudflare.workers.dev/pr"
                            title="Endpoint para criação automática de Pull Requests no repositório público">
-                    <small class="muted">URL do endpoint para criação automática de Pull Requests</small>
+                    <small class="muted">
+                        URL do endpoint serverless para criação automática de Pull Requests. 
+                        <strong>Deve começar com https://</strong> para garantir segurança.
+                        Deixe em branco se não desejar usar integração automática.
+                    </small>
                     <div class="error-message">URL do endpoint inválida</div>
                 </div>
                 

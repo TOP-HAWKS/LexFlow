@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Serverless Endpoint Validation</title>
+    <style>
+        .form-field { margin: 10px 0; }
+        .form-field.error { border-left: 3px solid red; }
+        .form-field.success { border-left: 3px solid green; }
+        .error-message { color: red; font-size: 12px; }
+        input { width: 300px; padding: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Test Serverless Endpoint Validation</h1>
+    
+    <div class="form-field">
+        <label for="test-endpoint">Serverless Endpoint:</label><br>
+        <input type="url" id="test-endpoint" placeholder="https://api.example.com/endpoint">
+        <div class="error-message"></div>
+    </div>
+    
+    <button onclick="testValidation()">Test Validation</button>
+    
+    <script>
+        // Simplified validation function from app.js
+        function isValidHttpsUrl(url) {
+            try {
+                const urlObj = new URL(url);
+                return urlObj.protocol === 'https:';
+            } catch {
+                return false;
+            }
+        }
+        
+        function validateServerlessEndpointRealTime(field) {
+            const formField = field.closest('.form-field');
+            if (!formField) return;
+
+            const value = field.value.trim();
+            
+            // Clear previous states
+            formField.classList.remove('error', 'success');
+            
+            // Don't validate empty field in real-time
+            if (!value) return;
+            
+            let isValid = true;
+            let errorMessage = '';
+            
+            // Check if URL starts with https://
+            if (!value.startsWith('https://')) {
+                isValid = false;
+                errorMessage = 'URL deve começar com "https://"';
+            } else {
+                // Check if it's a valid URL format
+                try {
+                    new URL(value);
+                    // Additional validation for common endpoint patterns
+                    if (value.length < 12) { // https:// is 8 chars, need at least domain
+                        isValid = false;
+                        errorMessage = 'URL muito curta. Inclua o domínio completo.';
+                    } else if (!value.includes('.')) {
+                        isValid = false;
+                        errorMessage = 'URL deve incluir um domínio válido';
+                    }
+                } catch {
+                    isValid = false;
+                    errorMessage = 'Formato de URL inválido';
+                }
+            }
+            
+            // Apply validation state immediately
+            if (!isValid) {
+                formField.classList.add('error');
+                const errorElement = formField.querySelector('.error-message');
+                if (errorElement) {
+                    errorElement.textContent = errorMessage;
+                }
+            } else {
+                formField.classList.add('success');
+            }
+        }
+        
+        // Add real-time validation
+        document.getElementById('test-endpoint').addEventListener('input', function() {
+            validateServerlessEndpointRealTime(this);
+        });
+        
+        function testValidation() {
+            const field = document.getElementById('test-endpoint');
+            const value = field.value;
+            
+            console.log('Testing URL:', value);
+            console.log('Starts with https://:', value.startsWith('https://'));
+            console.log('Is valid HTTPS URL:', isValidHttpsUrl(value));
+            
+            validateServerlessEndpointRealTime(field);
+        }
+    </script>
+</body>
+</html>

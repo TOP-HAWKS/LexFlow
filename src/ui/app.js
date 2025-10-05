@@ -4662,10 +4662,27 @@ ${outputArea.value}
             isValid = false;
         }
 
-        // Validate serverless endpoint URL format if provided
-        if (serverlessEndpoint && !this.isValidHttpsUrl(serverlessEndpoint)) {
-            errors.serverlessEndpoint = 'URL deve começar com "https://"';
-            isValid = false;
+        // Enhanced serverless endpoint validation
+        if (serverlessEndpoint) {
+            if (!serverlessEndpoint.startsWith('https://')) {
+                errors.serverlessEndpoint = 'URL deve começar com "https://"';
+                isValid = false;
+            } else {
+                try {
+                    const urlObj = new URL(serverlessEndpoint);
+                    // Additional validation for endpoint URLs
+                    if (serverlessEndpoint.length < 12) {
+                        errors.serverlessEndpoint = 'URL muito curta. Inclua o domínio completo.';
+                        isValid = false;
+                    } else if (!urlObj.hostname.includes('.')) {
+                        errors.serverlessEndpoint = 'URL deve incluir um domínio válido';
+                        isValid = false;
+                    }
+                } catch {
+                    errors.serverlessEndpoint = 'Formato de URL inválido';
+                    isValid = false;
+                }
+            }
         }
 
         // Validate state and city (basic length check)
@@ -4747,7 +4764,17 @@ ${outputArea.value}
                 localStorage.setItem('lexflow-settings', JSON.stringify(settings));
             }
             
-            this.showToast('Configurações salvas com sucesso!', 'success');
+            // Enhanced success message with serverless endpoint feedback
+            let successMessage = 'Configurações salvas com sucesso!';
+            const serverlessEndpoint = document.getElementById('settings-serverless-endpoint').value.trim();
+            
+            if (serverlessEndpoint) {
+                successMessage += ' Integração serverless configurada e pronta para uso.';
+            } else {
+                successMessage += ' Para usar integração automática, configure o endpoint serverless.';
+            }
+            
+            this.showToast(successMessage, 'success', 6000);
             this.hideModal('settings');
             
             // Update jurisdiction fields in workspace if they're empty
@@ -4871,6 +4898,83 @@ ${outputArea.value}
     }
 
     /**
+     * Real-time validation for serverless endpoint URL
+     * @param {HTMLElement} field - The input field element
+     */
+    validateServerlessEndpointRealTime(field) {
+        if (!field || typeof field.closest !== 'function') return;
+
+        const formField = field.closest('.form-field');
+        if (!formField) return;
+
+        const value = field.value.trim();
+        
+        // Clear previous states
+        formField.classList.remove('error', 'success');
+        
+        // Don't validate empty field in real-time
+        if (!value) return;
+        
+        let isValid = true;
+        let errorMessage = '';
+        
+        // Check if URL starts with https://
+        if (!value.startsWith('https://')) {
+            isValid = false;
+            errorMessage = 'URL deve começar com "https://"';
+        } else {
+            // Check if it's a valid URL format
+            try {
+                new URL(value);
+                // Additional validation for common endpoint patterns
+                if (value.length < 12) { // https:// is 8 chars, need at least domain
+                    isValid = false;
+                    errorMessage = 'URL muito curta. Inclua o domínio completo.';
+                } else if (!value.includes('.')) {
+                    isValid = false;
+                    errorMessage = 'URL deve incluir um domínio válido';
+                }
+            } catch {
+                isValid = false;
+                errorMessage = 'Formato de URL inválido';
+            }
+        }
+        
+        // Apply validation state immediately
+        if (!isValid) {
+            formField.classList.add('error');
+            const errorElement = formField.querySelector('.error-message');
+            if (errorElement) {
+                errorElement.textContent = errorMessage;
+            }
+        } else {
+            formField.classList.add('success');
+        }
+    }
+
+    /**
+     * Show configuration guidance for serverless endpoint setup
+     */
+    showServerlessConfigurationGuidance() {
+        const guidanceMessage = `
+            <strong>Configuração do Endpoint Serverless</strong><br>
+            Para usar a integração automática:<br>
+            1. Configure um endpoint serverless (Cloudflare Worker, Vercel, etc.)<br>
+            2. O endpoint deve aceitar POST requests com JSON<br>
+            3. Insira a URL completa começando com https://<br>
+            4. Teste a configuração enviando um extrato
+        `;
+        
+        this.showToastWithAction(
+            guidanceMessage,
+            'info',
+            12000,
+            'Configurar Agora',
+            () => this.navigate('settings')
+        );
+    }
+
+    /**
      * Initialize real-time validation for settings form
      */
     initSettingsFormValidation() {
@@ -4886,6 +4990,13 @@ ${outputArea.value}
         formFields.forEach(fieldId => {
             const field = document.getElementById(fieldId);
             if (field) {
+                // Real-time validation for serverless endpoint (on input)
+                if (fieldId === 'settings-serverless-endpoint') {
+                    field.addEventListener('input', () => {
+                        this.validateServerlessEndpointRealTime(field);
+                    });
+                }
+                
                 // Validate on blur (when user leaves the field)
                 field.addEventListener('blur', () => {
                     this.validateSingleField(fieldId);

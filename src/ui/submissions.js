@@ -62,24 +62,52 @@ async function submitToServerlessEndpoint() {
     // Get the configured serverless endpoint
     endpoint = await getSetting('serverlessEndpoint');
     
-    // Validate endpoint configuration
+    // Validate endpoint configuration with enhanced guidance
     if (!endpoint) {
-      const errorMessage = 'Configure o endpoint serverless nas configurações';
-      if (window.app && window.app.showToast) {
-        window.app.showToast(errorMessage, 'error', 5000);
+      const errorMessage = 'Endpoint serverless não configurado';
+      const guidance = 'Configure o endpoint nas configurações para enviar extratos automaticamente';
+      
+      if (window.app && window.app.showToastWithAction) {
+        window.app.showToastWithAction(
+          `${errorMessage}. ${guidance}`,
+          'warning',
+          8000,
+          'Configurar Agora',
+          () => {
+            if (window.app && window.app.navigate) {
+              window.app.navigate('settings');
+            }
+          }
+        );
+      } else if (window.app && window.app.showToast) {
+        window.app.showToast(`${errorMessage}. ${guidance}`, 'warning', 8000);
       } else {
-        alert(errorMessage);
+        alert(`${errorMessage}. ${guidance}`);
       }
       return;
     }
     
-    // Validate URL format
+    // Validate URL format with actionable guidance
     if (!endpoint.startsWith('https://')) {
-      const errorMessage = 'URL do endpoint deve começar com https://';
-      if (window.app && window.app.showToast) {
-        window.app.showToast(errorMessage, 'error', 5000);
+      const errorMessage = 'URL do endpoint inválida';
+      const guidance = 'O endpoint deve começar com "https://" para garantir segurança';
+      
+      if (window.app && window.app.showToastWithAction) {
+        window.app.showToastWithAction(
+          `${errorMessage}. ${guidance}`,
+          'error',
+          8000,
+          'Corrigir URL',
+          () => {
+            if (window.app && window.app.navigate) {
+              window.app.navigate('settings');
+            }
+          }
+        );
+      } else if (window.app && window.app.showToast) {
+        window.app.showToast(`${errorMessage}. ${guidance}`, 'error', 8000);
       } else {
-        alert(errorMessage);
+        alert(`${errorMessage}. ${guidance}`);
       }
       return;
     }
@@ -130,25 +158,59 @@ async function submitToServerlessEndpoint() {
       throw new Error('Resposta inválida do servidor. Formato JSON esperado.');
     }
     
-    // Handle different response scenarios
+    // Handle different response scenarios with enhanced feedback
     if (result.success === true || result.success === undefined) {
-      // Success scenario
-      const message = result.message || 'Submitted successfully';
+      // Success scenario with detailed feedback
+      const baseMessage = result.message || 'Extrato legal enviado com sucesso!';
       
-      // Show success toast with additional info if available
-      let successMessage = message;
-      if (result.data && result.data.pr_url) {
-        successMessage += ` - PR: ${result.data.pr_number || 'created'}`;
+      // Build enhanced success message with additional details
+      let successMessage = baseMessage;
+      let actionLabel = null;
+      let actionHandler = null;
+      
+      if (result.data) {
+        if (result.data.pr_url) {
+          successMessage += ` Pull Request #${result.data.pr_number || 'criado'}`;
+          actionLabel = 'Ver PR';
+          actionHandler = () => window.open(result.data.pr_url, '_blank');
+        } else if (result.data.issue_url) {
+          successMessage += ` Issue #${result.data.issue_number || 'criada'}`;
+          actionLabel = 'Ver Issue';
+          actionHandler = () => window.open(result.data.issue_url, '_blank');
+        }
       }
       
-      if (window.app && window.app.showToast) {
-        window.app.showToast(successMessage, 'success', 5000);
+      // Show enhanced success toast with action if available
+      if (actionLabel && actionHandler && window.app && window.app.showToastWithAction) {
+        window.app.showToastWithAction(
+          successMessage,
+          'success',
+          8000,
+          actionLabel,
+          actionHandler
+        );
+      } else if (window.app && window.app.showToast) {
+        window.app.showToast(successMessage, 'success', 6000);
       } else {
         alert(successMessage);
       }
+      
+      // Update submission status if current item exists
+      if (current && window.updateSubmission) {
+        try {
+          await window.updateSubmission(current.id, { 
+            status: 'submitted',
+            submittedAt: new Date().toISOString(),
+            submissionData: result.data
+          });
+        } catch (updateError) {
+          console.warn('Failed to update submission status:', updateError);
+        }
+      }
+      
     } else {
       // Error scenario from server
-      const errorMessage = result.message || result.error || 'Submission failed';
+      const errorMessage = result.message || result.error || 'Falha no envio do extrato';
       throw new Error(errorMessage);
     }
     
@@ -162,30 +224,70 @@ async function submitToServerlessEndpoint() {
       // Fallback to network error handling for compatibility
       await window.app.handleNetworkError(error, 'Serverless submission', endpoint);
     } else {
-      // Final fallback error handling
-      let userMessage = 'Error submitting to endpoint. Check serverless config.';
+      // Enhanced fallback error handling with actionable suggestions
+      let userMessage = 'Erro ao enviar extrato';
+      let suggestion = 'Verifique a configuração do endpoint';
+      let actionLabel = null;
+      let actionHandler = null;
       
       if (error.name === 'AbortError') {
-        userMessage = 'Timeout na requisição. Tente novamente.';
-      } else if (error.message.includes('fetch')) {
-        userMessage = 'Erro de rede. Verifique sua conexão.';
+        userMessage = 'Timeout na requisição';
+        suggestion = 'O servidor demorou para responder. Tente novamente.';
+        actionLabel = 'Tentar Novamente';
+        actionHandler = () => submitToServerlessEndpoint();
+      } else if (error.message.includes('fetch') || error.message.includes('network')) {
+        userMessage = 'Erro de conexão';
+        suggestion = 'Verifique sua conexão com a internet e tente novamente.';
+        actionLabel = 'Tentar Novamente';
+        actionHandler = () => submitToServerlessEndpoint();
       } else if (error.message.includes('não encontrado')) {
-        userMessage = error.message;
+        userMessage = 'Endpoint não encontrado';
+        suggestion = 'Verifique se a URL do endpoint está correta nas configurações.';
+        actionLabel = 'Configurações';
+        actionHandler = () => {
+          if (window.app && window.app.navigate) {
+            window.app.navigate('settings');
+          }
+        };
       } else if (error.message.includes('Acesso negado')) {
-        userMessage = error.message;
+        userMessage = 'Acesso negado';
+        suggestion = 'Verifique a configuração de autenticação do endpoint.';
+        actionLabel = 'Configurações';
+        actionHandler = () => {
+          if (window.app && window.app.navigate) {
+            window.app.navigate('settings');
+          }
+        };
       } else if (error.message.includes('Resposta inválida')) {
-        userMessage = error.message;
+        userMessage = 'Resposta inválida do servidor';
+        suggestion = 'O servidor retornou dados em formato incorreto. Tente novamente.';
+        actionLabel = 'Tentar Novamente';
+        actionHandler = () => submitToServerlessEndpoint();
       } else if (error.message.includes('servidor')) {
-        userMessage = error.message;
+        userMessage = 'Erro do servidor';
+        suggestion = 'Problema temporário no servidor. Tente novamente em alguns minutos.';
+        actionLabel = 'Tentar Novamente';
+        actionHandler = () => submitToServerlessEndpoint();
       } else if (error.message && !error.message.includes('HTTP')) {
         // Use server-provided error message if it's not a generic HTTP error
         userMessage = error.message;
+        suggestion = 'Verifique a configuração e tente novamente.';
+        actionLabel = 'Configurações';
+        actionHandler = () => {
+          if (window.app && window.app.navigate) {
+            window.app.navigate('settings');
+          }
+        };
       }
       
-      if (window.app && window.app.showToast) {
-        window.app.showToast(userMessage, 'error', 8000);
+      const fullMessage = `${userMessage}. ${suggestion}`;
+      
+      if (actionLabel && actionHandler && window.app && window.app.showToastWithAction) {
+        window.app.showToastWithAction(fullMessage, 'error', 10000, actionLabel, actionHandler);
+      } else if (window.app && window.app.showToast) {
+        window.app.showToast(fullMessage, 'error', 8000);
       } else {
-        alert(userMessage);
+        alert(fullMessage);
       }
     }
   }
