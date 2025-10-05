@@ -19,6 +19,14 @@ class LexFlowApp {
             'settings': () => this.showModal('settings')
         };
 
+        // Context management for 2-step flow
+        this.selectedContext = {
+            articles: [],
+            text: '',
+            lastUpdated: null
+        };
+        this.contextPersistenceKey = 'workspace-context-state';
+
         // Error handling state
         this.isOnline = navigator.onLine;
         this.errorRetryCount = new Map();
@@ -1429,6 +1437,12 @@ class LexFlowApp {
             // Step navigation
             await this.initWorkspaceSteps();
 
+            // Restore context state from previous session
+            const contextRestored = await this.restoreContextState();
+            if (contextRestored) {
+                console.debug('Context restored from previous session');
+            }
+
             // Update loading message
             this.hideToast(loadingToastId);
             const configLoadingId = this.showLoadingToast('Carregando configurações...');
@@ -1850,6 +1864,12 @@ class LexFlowApp {
     goToWorkspaceStep(stepNumber) {
         if (stepNumber < 1 || stepNumber > 2) return;
 
+        // Check if step 2 should be enabled based on context
+        if (stepNumber === 2 && this.selectedContext.articles.length === 0) {
+            this.showToast('Selecione artigos antes de acessar o Prompt Studio', 'warning', 3000);
+            return;
+        }
+
         // Update step indicators with ARIA attributes
         document.querySelectorAll('.step').forEach((step, index) => {
             step.classList.remove('active', 'completed');
@@ -1878,6 +1898,12 @@ class LexFlowApp {
 
         this.currentStep = stepNumber;
 
+        // Update step enabling/disabling based on context
+        this.updateStepStates();
+
+        // Persist current step and context
+        this.saveContextState();
+
         // Update breadcrumb and navigation
         this.updateBreadcrumb('workspace');
         this.updateNavigationBadges();
@@ -1902,7 +1928,42 @@ class LexFlowApp {
             }
         }, 100);
 
+        // Debug logging for workspace state tracking
+        console.debug('Workspace State:', {
+            step: this.currentStep,
+            contextSize: this.selectedContext?.articles?.length || 0,
+            configValid: this.configurationValid,
+            view: this.currentView
+        });
+
         this.showToast(`Navegando para Etapa ${stepNumber}`, 'info', 1500);
+    }
+
+    /**
+     * Update step states based on context and configuration
+     */
+    updateStepStates() {
+        const step2Element = document.querySelector('.step[data-step="2"]');
+        const nextBtn = document.getElementById('next-step-1');
+        
+        if (step2Element) {
+            const hasContext = this.selectedContext.articles.length > 0;
+            
+            if (hasContext) {
+                step2Element.classList.remove('disabled');
+                step2Element.setAttribute('aria-disabled', 'false');
+                step2Element.setAttribute('tabindex', '0');
+            } else {
+                step2Element.classList.add('disabled');
+                step2Element.setAttribute('aria-disabled', 'true');
+                step2Element.setAttribute('tabindex', '-1');
+            }
+        }
+
+        // Update next button state
+        if (nextBtn) {
+            nextBtn.disabled = this.selectedContext.articles.length === 0;
+        }
     }
 
     /**
@@ -2208,7 +2269,12 @@ class LexFlowApp {
         this.initArticleSelection();
 
         // Load available documents when step is accessed
-        this.loadAvailableDocuments();
+        this.loadAvailableDocuments().then(() => {
+            // Restore context UI after documents are loaded
+            this.restoreContextUI();
+        }).catch(error => {
+            console.warn('Failed to load documents or restore context UI:', error);
+        });
     }
 
     /**
@@ -2815,31 +2881,214 @@ class LexFlowApp {
             this.selectedArticles.add(parseInt(checkbox.dataset.index));
         });
 
-        if (this.selectedArticles.size === 0) {
+        // Update context state
+        this.selectedContext.articles = Array.from(this.selectedArticles)
+            .sort((a, b) => a - b)
+            .map(index => this.allArticles[index]);
+        
+        this.selectedContext.lastUpdated = Date.now();
+
+        if (this.selectedContext.articles.length === 0) {
             contextArea.value = '';
             contextArea.placeholder = 'Os artigos selecionados aparecerão aqui...';
-            return;
-        }
-
-        // Build context from selected articles
-        const selectedTexts = Array.from(this.selectedArticles)
-            .sort((a, b) => a - b)
-            .map(index => {
-                const article = this.allArticles[index];
+            this.selectedContext.text = '';
+        } else {
+            // Build context text from selected articles
+            const selectedTexts = this.selectedContext.articles.map(article => {
                 return `${article.title}\n\n${article.text}`;
             });
 
-        contextArea.value = selectedTexts.join('\n\n---\n\n');
-        contextArea.placeholder = '';
-
-        // Update button state - step 1 now goes to step 2 (Prompt Studio)
-        const nextBtn = document.getElementById('next-step-1');
-        if (nextBtn) {
-            nextBtn.disabled = this.selectedArticles.size === 0;
+            this.selectedContext.text = selectedTexts.join('\n\n---\n\n');
+            contextArea.value = this.selectedContext.text;
+            contextArea.placeholder = '';
         }
 
+        // Update step states based on context
+        this.updateStepStates();
+
+        // Persist context state
+        this.saveContextState();
+
         // Show selection count
-        this.showToast(`${this.selectedArticles.size} artigos selecionados`, 'info', 1500);
+        this.showToast(`${this.selectedContext.articles.length} artigos selecionados`, 'info', 1500);
+    }
+
+    /**
+     * Save context state to IndexedDB for persistence across sessions
+     */
+    async saveContextState() {
+        try {
+            const contextState = {
+                currentStep: this.currentStep,
+                selectedContext: this.selectedContext,
+                selectedArticles: Array.from(this.selectedArticles || []),
+                timestamp: Date.now()
+            };
+
+            await setSetting(this.contextPersistenceKey, contextState);
+            console.debug('Context state saved:', contextState);
+        } catch (error) {
+            console.warn('Failed to save context state:', error);
+            // Fallback to sessionStorage
+            try {
+                sessionStorage.setItem(this.contextPersistenceKey, JSON.stringify({
+                    currentStep: this.currentStep,
+                    selectedContext: this.selectedContext,
+                    selectedArticles: Array.from(this.selectedArticles || []),
+                    timestamp: Date.now()
+                }));
+            } catch (sessionError) {
+                console.warn('Failed to save context state to sessionStorage:', sessionError);
+            }
+        }
+    }
+
+    /**
+     * Restore context state from IndexedDB on extension reload
+     */
+    async restoreContextState() {
+        try {
+            let contextState = null;
+
+            // Try IndexedDB first
+            try {
+                contextState = await getSetting(this.contextPersistenceKey);
+            } catch (error) {
+                console.warn('Failed to load context state from IndexedDB:', error);
+                // Fallback to sessionStorage
+                const sessionData = sessionStorage.getItem(this.contextPersistenceKey);
+                if (sessionData) {
+                    contextState = JSON.parse(sessionData);
+                }
+            }
+
+            if (contextState && contextState.timestamp) {
+                // Check if context is not too old (24 hours)
+                const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+                if (Date.now() - contextState.timestamp < maxAge) {
+                    // Restore context
+                    this.selectedContext = contextState.selectedContext || {
+                        articles: [],
+                        text: '',
+                        lastUpdated: null
+                    };
+
+                    // Restore selected articles set
+                    this.selectedArticles = new Set(contextState.selectedArticles || []);
+
+                    // Restore current step
+                    if (contextState.currentStep && contextState.currentStep >= 1 && contextState.currentStep <= 2) {
+                        this.currentStep = contextState.currentStep;
+                    }
+
+                    console.debug('Context state restored:', contextState);
+                    return true;
+                } else {
+                    console.debug('Context state expired, clearing');
+                    await this.clearContextState();
+                }
+            }
+        } catch (error) {
+            console.warn('Failed to restore context state:', error);
+        }
+        return false;
+    }
+
+    /**
+     * Clear context state when critical settings change
+     */
+    async clearContextState() {
+        try {
+            // Clear from IndexedDB
+            await setSetting(this.contextPersistenceKey, null);
+            
+            // Clear from sessionStorage
+            sessionStorage.removeItem(this.contextPersistenceKey);
+
+            // Reset context
+            this.selectedContext = {
+                articles: [],
+                text: '',
+                lastUpdated: null
+            };
+
+            // Clear selected articles
+            if (this.selectedArticles) {
+                this.selectedArticles.clear();
+            }
+
+            // Reset to step 1
+            this.currentStep = 1;
+
+            // Update UI
+            const contextArea = document.getElementById('selected-context');
+            if (contextArea) {
+                contextArea.value = '';
+                contextArea.placeholder = 'Os artigos selecionados aparecerão aqui...';
+            }
+
+            // Clear article checkboxes
+            document.querySelectorAll('.article-checkbox:checked').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+
+            // Update step states
+            this.updateStepStates();
+
+            console.debug('Context state cleared');
+        } catch (error) {
+            console.warn('Failed to clear context state:', error);
+        }
+    }
+
+    /**
+     * Restore UI state after context restoration
+     */
+    async restoreContextUI() {
+        if (this.selectedContext.articles.length === 0) return;
+
+        // Wait for documents to be loaded first
+        await new Promise(resolve => {
+            const checkDocuments = () => {
+                if (this.allArticles && this.allArticles.length > 0) {
+                    resolve();
+                } else {
+                    setTimeout(checkDocuments, 100);
+                }
+            };
+            checkDocuments();
+        });
+
+        // Restore selected article checkboxes
+        this.selectedContext.articles.forEach(contextArticle => {
+            const articleIndex = this.allArticles.findIndex(article => 
+                article.title === contextArticle.title && article.text === contextArticle.text
+            );
+            
+            if (articleIndex !== -1) {
+                const checkbox = document.querySelector(`.article-checkbox[data-index="${articleIndex}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    this.selectedArticles.add(articleIndex);
+                }
+            }
+        });
+
+        // Restore context textarea
+        const contextArea = document.getElementById('selected-context');
+        if (contextArea && this.selectedContext.text) {
+            contextArea.value = this.selectedContext.text;
+        }
+
+        // Update step states
+        this.updateStepStates();
+
+        // Navigate to restored step
+        if (this.currentStep !== 1) {
+            this.goToWorkspaceStep(this.currentStep);
+        }
+
+        console.debug('Context UI restored');
     }
 
     /**
@@ -4636,6 +4885,9 @@ ${outputArea.value}
             return;
         }
 
+        // Get current settings to check for critical changes
+        const currentSettings = await this.loadSettings();
+
         const settings = {
             language: document.getElementById('settings-language').value,
             country: document.getElementById('settings-country').value,
@@ -4644,6 +4896,12 @@ ${outputArea.value}
             corpusUrl: document.getElementById('settings-corpus-url').value,
             serverlessEndpoint: document.getElementById('settings-serverless-endpoint').value
         };
+
+        // Check if critical settings changed (language or country)
+        const criticalSettingsChanged = currentSettings && (
+            currentSettings.language !== settings.language ||
+            currentSettings.country !== settings.country
+        );
 
         // Show loading state
         const saveBtn = document.getElementById('save-settings-btn');
@@ -4677,6 +4935,12 @@ ${outputArea.value}
 
             // Update jurisdiction fields in workspace if they're empty
             this.updateWorkspaceFromSettings(settings);
+
+            // Clear context if critical settings changed
+            if (criticalSettingsChanged) {
+                await this.clearContextState();
+                this.showToast('Contexto resetado devido à mudança de jurisdição', 'info', 3000);
+            }
 
             // Refresh workspace configuration if currently in workspace view
             if (this.currentView === 'workspace') {

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Context Management</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .step { padding: 10px; margin: 5px; border: 1px solid #ddd; cursor: pointer; }
+        .step.active { background: #007bff; color: white; }
+        .step.disabled { opacity: 0.5; cursor: not-allowed; background: #ccc; }
+        button { margin: 5px; padding: 8px 16px; }
+        textarea { width: 100%; height: 100px; margin: 10px 0; }
+        .context-info { background: #f8f9fa; padding: 10px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Context Management Test</h1>
+    
+    <div class="test-section">
+        <h2>Step Navigation</h2>
+        <div class="step active" data-step="1">Step 1: Leis & Artigos</div>
+        <div class="step disabled" data-step="2">Step 2: Prompt Studio</div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Context Management</h2>
+        <button onclick="addArticle()">Add Article</button>
+        <button onclick="clearContext()">Clear Context</button>
+        <button onclick="saveContext()">Save Context</button>
+        <button onclick="restoreContext()">Restore Context</button>
+        
+        <div class="context-info">
+            <strong>Context Articles:</strong> <span id="article-count">0</span><br>
+            <strong>Step 2 Enabled:</strong> <span id="step2-status">No</span>
+        </div>
+        
+        <textarea id="context-text" placeholder="Context will appear here..."></textarea>
+    </div>
+    
+    <div class="test-section">
+        <h2>Settings Change Test</h2>
+        <button onclick="changeLanguage()">Change Language (should reset context)</button>
+        <button onclick="changeCountry()">Change Country (should reset context)</button>
+        <button onclick="changeCity()">Change City (should NOT reset context)</button>
+    </div>
+
+    <script>
+        // Mock context management implementation
+        class ContextManager {
+            constructor() {
+                this.selectedContext = {
+                    articles: [],
+                    text: '',
+                    lastUpdated: null
+                };
+                this.currentStep = 1;
+                this.contextPersistenceKey = 'test-workspace-context-state';
+                this.currentSettings = { language: 'pt-BR', country: 'br', city: 'Porto Alegre' };
+            }
+
+            updateStepStates() {
+                const step2 = document.querySelector('.step[data-step="2"]');
+                const hasContext = this.selectedContext.articles.length > 0;
+                
+                if (hasContext) {
+                    step2.classList.remove('disabled');
+                    step2.classList.add('enabled');
+                } else {
+                    step2.classList.add('disabled');
+                    step2.classList.remove('enabled');
+                }
+                
+                document.getElementById('step2-status').textContent = hasContext ? 'Yes' : 'No';
+                document.getElementById('article-count').textContent = this.selectedContext.articles.length;
+            }
+
+            addArticle() {
+                const article = {
+                    title: `Article ${this.selectedContext.articles.length + 1}`,
+                    text: `Content of article ${this.selectedContext.articles.length + 1}`
+                };
+                
+                this.selectedContext.articles.push(article);
+                this.selectedContext.text = this.selectedContext.articles
+                    .map(a => `${a.title}\n\n${a.text}`)
+                    .join('\n\n---\n\n');
+                this.selectedContext.lastUpdated = Date.now();
+                
+                document.getElementById('context-text').value = this.selectedContext.text;
+                this.updateStepStates();
+                this.saveContextState();
+            }
+
+            clearContext() {
+                this.selectedContext = {
+                    articles: [],
+                    text: '',
+                    lastUpdated: null
+                };
+                
+                document.getElementById('context-text').value = '';
+                this.updateStepStates();
+                this.saveContextState();
+            }
+
+            saveContextState() {
+                const contextState = {
+                    currentStep: this.currentStep,
+                    selectedContext: this.selectedContext,
+                    timestamp: Date.now()
+                };
+                
+                localStorage.setItem(this.contextPersistenceKey, JSON.stringify(contextState));
+                console.log('Context saved:', contextState);
+            }
+
+            restoreContextState() {
+                const saved = localStorage.getItem(this.contextPersistenceKey);
+                if (saved) {
+                    const contextState = JSON.parse(saved);
+                    
+                    // Check if not too old (24 hours)
+                    const maxAge = 24 * 60 * 60 * 1000;
+                    if (Date.now() - contextState.timestamp < maxAge) {
+                        this.selectedContext = contextState.selectedContext;
+                        this.currentStep = contextState.currentStep;
+                        
+                        document.getElementById('context-text').value = this.selectedContext.text;
+                        this.updateStepStates();
+                        console.log('Context restored:', contextState);
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            clearContextState() {
+                localStorage.removeItem(this.contextPersistenceKey);
+                this.clearContext();
+                console.log('Context state cleared');
+            }
+
+            changeSettings(newSettings) {
+                const criticalChanged = 
+                    this.currentSettings.language !== newSettings.language ||
+                    this.currentSettings.country !== newSettings.country;
+                
+                this.currentSettings = { ...newSettings };
+                
+                if (criticalChanged) {
+                    this.clearContextState();
+                    alert('Context reset due to critical settings change');
+                } else {
+                    alert('Settings changed, context preserved');
+                }
+            }
+        }
+
+        // Initialize
+        const contextManager = new ContextManager();
+        
+        // Global functions for buttons
+        function addArticle() {
+            contextManager.addArticle();
+        }
+        
+        function clearContext() {
+            contextManager.clearContext();
+        }
+        
+        function saveContext() {
+            contextManager.saveContextState();
+            alert('Context saved to localStorage');
+        }
+        
+        function restoreContext() {
+            const restored = contextManager.restoreContextState();
+            alert(restored ? 'Context restored!' : 'No context to restore');
+        }
+        
+        function changeLanguage() {
+            contextManager.changeSettings({ 
+                ...contextManager.currentSettings, 
+                language: 'en-US' 
+            });
+        }
+        
+        function changeCountry() {
+            contextManager.changeSettings({ 
+                ...contextManager.currentSettings, 
+                country: 'us' 
+            });
+        }
+        
+        function changeCity() {
+            contextManager.changeSettings({ 
+                ...contextManager.currentSettings, 
+                city: 'New York' 
+            });
+        }
+
+        // Step navigation
+        document.querySelectorAll('.step').forEach(step => {
+            step.addEventListener('click', (e) => {
+                const stepNumber = parseInt(e.target.dataset.step);
+                if (stepNumber === 2 && contextManager.selectedContext.articles.length === 0) {
+                    alert('Select articles before accessing Prompt Studio');
+                    return;
+                }
+                
+                document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+                e.target.classList.add('active');
+                contextManager.currentStep = stepNumber;
+                contextManager.saveContextState();
+            });
+        });
+
+        // Initialize UI
+        contextManager.updateStepStates();
+    </script>
+</body>
+</html>

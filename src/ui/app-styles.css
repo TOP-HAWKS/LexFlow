@@ -372,6 +372,19 @@ button.outline:hover:not(:disabled) {
     outline-offset: 2px;
 }
 
+.step.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--pico-muted-border-color);
+    color: var(--pico-muted-color);
+}
+
+.step.disabled:hover {
+    transform: none;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
 .step-number {
     width: 24px;
     height: 24px;
