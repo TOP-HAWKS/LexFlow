@@ -18,18 +18,18 @@ class LexFlowApp {
             'collector': () => this.showView('collector'),
             'settings': () => this.showModal('settings')
         };
-        
+
         // Error handling state
         this.isOnline = navigator.onLine;
         this.errorRetryCount = new Map();
         this.maxRetries = 3;
-        
+
         // Initialize error handling
         this.initErrorHandling();
-        
+
         // Initialize performance monitoring
         this.initPerformanceMonitoring();
-        
+
         // Initialize asynchronously
         this.init().catch(error => this.handleGlobalError(error, 'Application initialization'));
     }
@@ -82,7 +82,7 @@ class LexFlowApp {
         if (usagePercent > 80) {
             console.warn('High memory usage detected, performing cleanup');
             this.performMemoryCleanup();
-            
+
             this.showToast(
                 `Uso de memória alto (${usagePercent}%). Limpeza automática realizada.`,
                 'warning',
@@ -162,16 +162,16 @@ class LexFlowApp {
      */
     handleGlobalError(error, context = 'Unknown', metadata = {}) {
         console.error(`Global error in ${context}:`, error, metadata);
-        
+
         // Determine error type and severity
         const errorInfo = this.categorizeError(error, context);
-        
+
         // Log error for debugging
         this.logError(error, context, metadata, errorInfo);
-        
+
         // Show user-friendly message
         this.showErrorToUser(errorInfo);
-        
+
         // Attempt recovery if possible
         this.attemptErrorRecovery(errorInfo, context);
     }
@@ -184,9 +184,9 @@ class LexFlowApp {
      */
     categorizeError(error, context) {
         const errorMessage = error?.message || error?.toString() || 'Unknown error';
-        
+
         // Network errors
-        if (errorMessage.includes('fetch') || errorMessage.includes('network') || 
+        if (errorMessage.includes('fetch') || errorMessage.includes('network') ||
             errorMessage.includes('Failed to fetch') || !this.isOnline) {
             return {
                 type: 'network',
@@ -197,9 +197,9 @@ class LexFlowApp {
                 retryable: true
             };
         }
-        
+
         // AI/Chrome AI errors
-        if (errorMessage.includes('ai') || errorMessage.includes('assistant') || 
+        if (errorMessage.includes('ai') || errorMessage.includes('assistant') ||
             errorMessage.includes('summarizer') || context.includes('AI')) {
             return {
                 type: 'ai',
@@ -211,9 +211,9 @@ class LexFlowApp {
                 helpAction: () => this.showAISetupHelp()
             };
         }
-        
+
         // Storage errors
-        if (errorMessage.includes('storage') || errorMessage.includes('quota') || 
+        if (errorMessage.includes('storage') || errorMessage.includes('quota') ||
             errorMessage.includes('IndexedDB') || errorMessage.includes('localStorage')) {
             return {
                 type: 'storage',
@@ -225,9 +225,9 @@ class LexFlowApp {
                 helpAction: () => this.showStorageHelp()
             };
         }
-        
+
         // Parsing/Markdown errors
-        if (errorMessage.includes('parse') || errorMessage.includes('markdown') || 
+        if (errorMessage.includes('parse') || errorMessage.includes('markdown') ||
             errorMessage.includes('JSON') || context.includes('markdown')) {
             return {
                 type: 'parsing',
@@ -238,9 +238,9 @@ class LexFlowApp {
                 retryable: false
             };
         }
-        
+
         // Permission errors
-        if (errorMessage.includes('permission') || errorMessage.includes('denied') || 
+        if (errorMessage.includes('permission') || errorMessage.includes('denied') ||
             errorMessage.includes('unauthorized')) {
             return {
                 type: 'permission',
@@ -251,13 +251,13 @@ class LexFlowApp {
                 retryable: false
             };
         }
-        
+
         // Serverless endpoint errors
-        if (errorMessage.includes('serverless') || errorMessage.includes('endpoint') || 
+        if (errorMessage.includes('serverless') || errorMessage.includes('endpoint') ||
             context.includes('Serverless') || context.includes('serverless') ||
             errorMessage.includes('Configure o endpoint') || errorMessage.includes('URL do endpoint') ||
             errorMessage.includes('Endpoint não encontrado') || errorMessage.includes('Timeout na requisição')) {
-            
+
             // Determine specific serverless error type
             if (errorMessage.includes('Configure o endpoint') || errorMessage.includes('não configurado')) {
                 return {
@@ -270,7 +270,7 @@ class LexFlowApp {
                     helpAction: () => this.navigate('settings')
                 };
             }
-            
+
             if (errorMessage.includes('URL do endpoint') || errorMessage.includes('https://')) {
                 return {
                     type: 'serverless_validation',
@@ -282,7 +282,7 @@ class LexFlowApp {
                     helpAction: () => this.navigate('settings')
                 };
             }
-            
+
             if (errorMessage.includes('404') || errorMessage.includes('não encontrado')) {
                 return {
                     type: 'serverless_not_found',
@@ -293,7 +293,7 @@ class LexFlowApp {
                     retryable: true
                 };
             }
-            
+
             if (errorMessage.includes('403') || errorMessage.includes('401') || errorMessage.includes('Acesso negado')) {
                 return {
                     type: 'serverless_auth',
@@ -304,7 +304,7 @@ class LexFlowApp {
                     retryable: false
                 };
             }
-            
+
             if (errorMessage.includes('500') || errorMessage.includes('servidor')) {
                 return {
                     type: 'serverless_server',
@@ -315,7 +315,7 @@ class LexFlowApp {
                     retryable: true
                 };
             }
-            
+
             if (errorMessage.includes('Timeout') || errorMessage.includes('timeout') || errorMessage.includes('AbortError')) {
                 return {
                     type: 'serverless_timeout',
@@ -326,7 +326,7 @@ class LexFlowApp {
                     retryable: true
                 };
             }
-            
+
             if (errorMessage.includes('Resposta inválida') || errorMessage.includes('JSON')) {
                 return {
                     type: 'serverless_response',
@@ -337,7 +337,7 @@ class LexFlowApp {
                     retryable: true
                 };
             }
-            
+
             // Generic serverless error
             return {
                 type: 'serverless_generic',
@@ -348,7 +348,7 @@ class LexFlowApp {
                 retryable: true
             };
         }
-        
+
         // Generic/Unknown errors
         return {
             type: 'unknown',
@@ -381,22 +381,22 @@ class LexFlowApp {
             isOnline: this.isOnline,
             currentView: this.currentView
         };
-        
+
         // Store error log locally for debugging
         try {
             const errorLogs = JSON.parse(localStorage.getItem('lexflow-error-logs') || '[]');
             errorLogs.push(errorLog);
-            
+
             // Keep only last 50 errors
             if (errorLogs.length > 50) {
                 errorLogs.splice(0, errorLogs.length - 50);
             }
-            
+
             localStorage.setItem('lexflow-error-logs', JSON.stringify(errorLogs));
         } catch (storageError) {
             console.warn('Could not store error log:', storageError);
         }
-        
+
         console.error('Detailed error log:', errorLog);
     }
 
@@ -407,7 +407,7 @@ class LexFlowApp {
     showErrorToUser(errorInfo) {
         const message = `${errorInfo.userMessage}. ${errorInfo.suggestion}`;
         const duration = errorInfo.severity === 'high' ? 8000 : 5000;
-        
+
         // Create enhanced toast with help action if available
         if (errorInfo.helpAction) {
             this.showToastWithAction(
@@ -429,14 +429,14 @@ class LexFlowApp {
      */
     attemptErrorRecovery(errorInfo, context) {
         if (!errorInfo.recoverable) return;
-        
+
         const retryKey = `${errorInfo.type}-${context}`;
         const currentRetries = this.errorRetryCount.get(retryKey) || 0;
-        
+
         if (errorInfo.retryable && currentRetries < this.maxRetries) {
             // Increment retry count
             this.errorRetryCount.set(retryKey, currentRetries + 1);
-            
+
             // Attempt recovery based on error type
             setTimeout(() => {
                 this.performErrorRecovery(errorInfo.type, context);
@@ -456,21 +456,21 @@ class LexFlowApp {
                     this.retryFailedOperations();
                 }
                 break;
-                
+
             case 'storage':
                 this.fallbackToSessionStorage();
                 break;
-                
+
             case 'ai':
                 this.fallbackToManualMode();
                 break;
-                
+
             case 'serverless_config':
             case 'serverless_validation':
                 // No automatic recovery - user needs to fix configuration
                 console.log('Serverless configuration error - manual intervention required');
                 break;
-                
+
             case 'serverless_not_found':
             case 'serverless_server':
             case 'serverless_timeout':
@@ -481,7 +481,7 @@ class LexFlowApp {
                     // Use setTimeout to implement exponential backoff in error recovery
                     const retryKey = `serverless-${context}`;
                     const currentRetries = this.errorRetryCount.get(retryKey) || 0;
-                    
+
                     if (currentRetries < this.maxRetries) {
                         const delay = Math.pow(2, currentRetries) * 1000;
                         setTimeout(() => {
@@ -490,12 +490,12 @@ class LexFlowApp {
                     }
                 }
                 break;
-                
+
             case 'serverless_auth':
                 // Authentication errors are not automatically retryable
                 console.log('Serverless authentication error - check endpoint configuration');
                 break;
-                
+
             default:
                 console.log(`No specific recovery for error type: ${errorType}`);
         }
@@ -510,7 +510,7 @@ class LexFlowApp {
      */
     async handleNetworkError(error, context = 'Network operation', url = '') {
         console.error(`Network error in ${context}:`, error);
-        
+
         const errorInfo = {
             type: 'network',
             context: context,
@@ -518,23 +518,23 @@ class LexFlowApp {
             isOnline: this.isOnline,
             timestamp: Date.now()
         };
-        
+
         // Determine specific network error type
         if (error.message.includes('404')) {
             this.showToast('Recurso não encontrado. Verifique a URL.', 'error', 5000);
             return { success: false, error: 'not_found', fallback: 'manual_entry' };
         }
-        
+
         if (error.message.includes('403') || error.message.includes('401')) {
             this.showToast('Acesso negado. Verifique as permissões.', 'error', 5000);
             return { success: false, error: 'permission_denied', fallback: 'alternative_source' };
         }
-        
+
         if (!this.isOnline) {
             this.showToast('Sem conexão. Usando modo offline.', 'warning', 5000);
             return { success: false, error: 'offline', fallback: 'cached_data' };
         }
-        
+
         // Generic network error
         this.showToastWithAction(
             'Erro de rede. Verifique sua conexão.',
@@ -543,7 +543,7 @@ class LexFlowApp {
             'Tentar Novamente',
             () => this.retryNetworkOperation(context, url)
         );
-        
+
         return { success: false, error: 'network_error', fallback: 'retry' };
     }
 
@@ -555,11 +555,11 @@ class LexFlowApp {
      */
     handleAIError(error, context = 'AI operation') {
         console.error(`AI error in ${context}:`, error);
-        
+
         let userMessage = 'Erro na operação de IA';
         let suggestion = '';
         let fallback = 'manual_mode';
-        
+
         if (error.message.includes('not available') || error.message.includes('undefined')) {
             userMessage = 'Chrome AI não está disponível';
             suggestion = 'Verifique as configurações do Chrome AI';
@@ -573,7 +573,7 @@ class LexFlowApp {
             suggestion = 'O modelo pode ainda estar sendo baixado';
             fallback = 'model_loading';
         }
-        
+
         this.showToastWithAction(
             `${userMessage}. ${suggestion}`,
             'error',
@@ -581,7 +581,7 @@ class LexFlowApp {
             'Configurar IA',
             () => this.showAISetupHelp()
         );
-        
+
         return { success: false, error: 'ai_error', fallback: fallback };
     }
 
@@ -593,16 +593,16 @@ class LexFlowApp {
      */
     async handleStorageError(error, context = 'Storage operation') {
         console.error(`Storage error in ${context}:`, error);
-        
+
         let userMessage = 'Erro de armazenamento';
         let suggestion = '';
         let fallback = 'session_storage';
-        
+
         if (error.message.includes('quota') || error.message.includes('exceeded')) {
             userMessage = 'Espaço de armazenamento esgotado';
             suggestion = 'Limpe dados antigos ou aumente o espaço disponível';
             fallback = 'cleanup_required';
-            
+
             // Attempt automatic cleanup
             await this.performStorageCleanup();
         } else if (error.message.includes('blocked') || error.message.includes('denied')) {
@@ -610,7 +610,7 @@ class LexFlowApp {
             suggestion = 'Verifique as configurações de privacidade do navegador';
             fallback = 'permission_required';
         }
-        
+
         this.showToastWithAction(
             `${userMessage}. ${suggestion}`,
             'error',
@@ -618,10 +618,10 @@ class LexFlowApp {
             'Gerenciar Armazenamento',
             () => this.showStorageHelp()
         );
-        
+
         // Fallback to session storage
         this.fallbackToSessionStorage();
-        
+
         return { success: false, error: 'storage_error', fallback: fallback };
     }
 
@@ -633,10 +633,10 @@ class LexFlowApp {
      */
     async handleServerlessError(error, context = 'Serverless operation') {
         console.error(`Serverless error in ${context}:`, error);
-        
+
         const errorInfo = this.categorizeError(error, context);
         let fallback = 'manual_retry';
-        
+
         // Determine specific serverless error handling
         switch (errorInfo.type) {
             case 'serverless_config':
@@ -649,7 +649,7 @@ class LexFlowApp {
                 );
                 fallback = 'configuration_required';
                 break;
-                
+
             case 'serverless_validation':
                 this.showToastWithAction(
                     errorInfo.userMessage + '. ' + errorInfo.suggestion,
@@ -660,7 +660,7 @@ class LexFlowApp {
                 );
                 fallback = 'validation_required';
                 break;
-                
+
             case 'serverless_not_found':
             case 'serverless_server':
             case 'serverless_timeout':
@@ -668,7 +668,7 @@ class LexFlowApp {
                 // Check if we should show manual retry or automatic retry
                 const retryKey = `serverless-${context}`;
                 const currentRetries = this.errorRetryCount.get(retryKey) || 0;
-                
+
                 if (currentRetries < this.maxRetries) {
                     // Show toast with both automatic retry info and manual retry option
                     this.showToastWithAction(
@@ -698,7 +698,7 @@ class LexFlowApp {
                 }
                 fallback = 'retryable';
                 break;
-                
+
             case 'serverless_auth':
                 this.showToast(
                     errorInfo.userMessage + '. ' + errorInfo.suggestion,
@@ -707,7 +707,7 @@ class LexFlowApp {
                 );
                 fallback = 'authentication_required';
                 break;
-                
+
             default:
                 this.showToastWithAction(
                     errorInfo.userMessage + '. ' + errorInfo.suggestion,
@@ -723,7 +723,7 @@ class LexFlowApp {
                 );
                 fallback = 'generic_retry';
         }
-        
+
         return { success: false, error: errorInfo.type, fallback: fallback };
     }
 
@@ -732,16 +732,16 @@ class LexFlowApp {
      */
     async retryFailedOperations() {
         if (!this.isOnline) return;
-        
+
         // Clear retry counts for network operations
         for (const [key, count] of this.errorRetryCount.entries()) {
             if (key.includes('network')) {
                 this.errorRetryCount.delete(key);
             }
         }
-        
+
         // Retry loading documents if in workspace
-        if (this.currentView === 'workspace' && this.currentStep === 2) {
+        if (this.currentView === 'workspace' && this.currentStep === 1) {
             try {
                 await this.loadAvailableDocuments();
             } catch (error) {
@@ -755,10 +755,10 @@ class LexFlowApp {
      */
     fallbackToSessionStorage() {
         console.warn('Falling back to session storage');
-        
+
         // Override storage methods to use sessionStorage
         this.useSessionStorageFallback = true;
-        
+
         this.showToast('Usando armazenamento temporário devido a limitações', 'warning', 5000);
     }
 
@@ -767,10 +767,10 @@ class LexFlowApp {
      */
     fallbackToManualMode() {
         console.warn('Falling back to manual mode');
-        
+
         this.chromeAIAvailable = false;
         this.updateIntegrationStatus();
-        
+
         this.showToast('Modo manual ativado. IA indisponível.', 'warning', 5000);
     }
 
@@ -783,9 +783,9 @@ class LexFlowApp {
             const usedMB = (estimate.usage / 1024 / 1024).toFixed(2);
             const quotaMB = (estimate.quota / 1024 / 1024).toFixed(2);
             const usagePercent = (estimate.usage / estimate.quota * 100).toFixed(1);
-            
+
             console.log(`Storage usage: ${usedMB}MB / ${quotaMB}MB (${usagePercent}%)`);
-            
+
             // Warn if usage is high
             if (usagePercent > 80) {
                 this.showToastWithAction(
@@ -812,15 +812,15 @@ class LexFlowApp {
                 const recentLogs = errorLogs.slice(-10);
                 localStorage.setItem('lexflow-error-logs', JSON.stringify(recentLogs));
             }
-            
+
             // Clean old cached data (if any)
-            const cacheKeys = Object.keys(localStorage).filter(key => 
-                key.startsWith('lexflow-cache-') && 
+            const cacheKeys = Object.keys(localStorage).filter(key =>
+                key.startsWith('lexflow-cache-') &&
                 Date.now() - parseInt(key.split('-').pop()) > 24 * 60 * 60 * 1000 // 24 hours
             );
-            
+
             cacheKeys.forEach(key => localStorage.removeItem(key));
-            
+
             if (cacheKeys.length > 0) {
                 this.showToast(`${cacheKeys.length} itens antigos removidos`, 'success', 3000);
             }
@@ -879,7 +879,7 @@ class LexFlowApp {
         // Update content and show modal
         document.getElementById('storage-help-content').innerHTML = helpContent;
         this.showModal('storage-help');
-        
+
         // Update storage usage info
         this.updateStorageUsageDisplay();
     }
@@ -890,14 +890,14 @@ class LexFlowApp {
     async updateStorageUsageDisplay() {
         const usageDiv = document.getElementById('storage-usage');
         if (!usageDiv) return;
-        
+
         try {
             if ('storage' in navigator && 'estimate' in navigator.storage) {
                 const estimate = await navigator.storage.estimate();
                 const usedMB = (estimate.usage / 1024 / 1024).toFixed(2);
                 const quotaMB = (estimate.quota / 1024 / 1024).toFixed(2);
                 const usagePercent = (estimate.usage / estimate.quota * 100).toFixed(1);
-                
+
                 usageDiv.innerHTML = `
                     <div class="usage-bar">
                         <div class="usage-fill" style="width: ${usagePercent}%"></div>
@@ -929,12 +929,12 @@ class LexFlowApp {
      */
     clearCachedData() {
         try {
-            const cacheKeys = Object.keys(localStorage).filter(key => 
+            const cacheKeys = Object.keys(localStorage).filter(key =>
                 key.startsWith('lexflow-cache-')
             );
-            
+
             cacheKeys.forEach(key => localStorage.removeItem(key));
-            
+
             this.showToast(`${cacheKeys.length} itens de cache removidos`, 'success', 3000);
         } catch (error) {
             this.showToast('Erro ao limpar cache', 'error', 3000);
@@ -951,13 +951,13 @@ class LexFlowApp {
             this.showToast('Ainda sem conexão', 'warning', 3000);
             return;
         }
-        
+
         this.showToast('Tentando novamente...', 'info', 2000);
-        
+
         // Reset retry count for this operation
         const retryKey = `network-${context}`;
         this.errorRetryCount.delete(retryKey);
-        
+
         // Retry based on context
         try {
             if (context.includes('document')) {
@@ -980,29 +980,29 @@ class LexFlowApp {
             this.showToast('Ainda sem conexão', 'warning', 3000);
             return;
         }
-        
+
         const retryKey = `serverless-${context}`;
         const currentRetries = this.errorRetryCount.get(retryKey) || 0;
-        
+
         // Check if we've exceeded max retries
         if (currentRetries >= this.maxRetries) {
             this.showToast('Máximo de tentativas atingido. Verifique a configuração.', 'error', 5000);
             this.errorRetryCount.delete(retryKey);
             return;
         }
-        
+
         // Increment retry count
         this.errorRetryCount.set(retryKey, currentRetries + 1);
-        
+
         // Calculate delay with exponential backoff (1s, 2s, 4s, 8s...)
         const delay = Math.pow(2, currentRetries) * 1000;
         const delaySeconds = delay / 1000;
-        
+
         this.showToast(`Tentando novamente em ${delaySeconds}s... (${currentRetries + 1}/${this.maxRetries})`, 'info', delay);
-        
+
         // Wait for the calculated delay
         await new Promise(resolve => setTimeout(resolve, delay));
-        
+
         // Retry based on context
         try {
             if (context.includes('submission') || context.includes('Serverless')) {
@@ -1031,12 +1031,12 @@ class LexFlowApp {
             this.initRouter();
             this.initEventListeners();
             this.initToastSystem();
-            
+
             // Load settings on startup
             await this.loadSettings();
-            
+
             this.loadInitialView();
-            
+
             console.log('LexFlow SPA initialized');
         } catch (error) {
             this.handleGlobalError(error, 'Application initialization');
@@ -1062,7 +1062,7 @@ class LexFlowApp {
     handleRouteChange() {
         const hash = window.location.hash.slice(1) || 'home';
         const route = this.routes[hash];
-        
+
         if (route) {
             route();
             this.updateNavigationState(hash);
@@ -1089,14 +1089,14 @@ class LexFlowApp {
     showView(viewName) {
         // Performance optimization: avoid unnecessary view switches
         if (this.currentView === viewName) return;
-        
+
         // Add loading state with performance timing
         const startTime = performance.now();
         document.body.classList.add('loading');
-        
+
         // Cleanup previous view to free memory
         this.cleanupCurrentView();
-        
+
         // Hide all views with optimized selector
         const views = document.querySelectorAll('.view.active');
         views.forEach(view => {
@@ -1109,16 +1109,16 @@ class LexFlowApp {
             if (targetView) {
                 targetView.classList.add('active');
                 this.currentView = viewName;
-                
+
                 // Initialize view-specific functionality asynchronously
                 this.initViewFunctionality(viewName).then(() => {
                     // Remove loading state
                     document.body.classList.remove('loading');
-                    
+
                     // Performance logging
                     const loadTime = performance.now() - startTime;
                     console.log(`View ${viewName} loaded in ${loadTime.toFixed(2)}ms`);
-                    
+
                     // Show performance warning if slow
                     if (loadTime > 500) {
                         console.warn(`Slow view load detected: ${viewName} took ${loadTime.toFixed(2)}ms`);
@@ -1142,21 +1142,21 @@ class LexFlowApp {
         if (this.searchTimeout) clearTimeout(this.searchTimeout);
         if (this.autoSaveTimeout) clearTimeout(this.autoSaveTimeout);
         if (this.corpusValidationTimeout) clearTimeout(this.corpusValidationTimeout);
-        
+
         // Clear any intervals
         if (this.performanceMonitorInterval) {
             clearInterval(this.performanceMonitorInterval);
             this.performanceMonitorInterval = null;
         }
-        
+
         // Remove dynamic event listeners to prevent memory leaks
         this.removeDynamicEventListeners();
-        
+
         // Clear large data structures
         if (this.allArticles && this.allArticles.length > 100) {
             this.allArticles = [];
         }
-        
+
         // Clear cached DOM references
         this.cachedElements = {};
     }
@@ -1169,7 +1169,7 @@ class LexFlowApp {
         document.querySelectorAll('.article-checkbox').forEach(checkbox => {
             checkbox.replaceWith(checkbox.cloneNode(true));
         });
-        
+
         // Remove dynamic button listeners
         document.querySelectorAll('[onclick*="app."]').forEach(element => {
             const newElement = element.cloneNode(true);
@@ -1191,20 +1191,20 @@ class LexFlowApp {
                 tab.setAttribute('aria-current', 'page');
             }
         });
-        
+
         // Update breadcrumb navigation
         this.updateBreadcrumb(activeRoute);
-        
+
         // Update navigation badges
         this.updateNavigationBadges();
-        
+
         // Announce view change to screen readers
         this.announceViewChange(activeRoute);
-        
+
         // Focus management
         this.manageFocus(activeRoute);
     }
-    
+
     /**
      * Update breadcrumb navigation
      * @param {string} activeView - The currently active view
@@ -1212,34 +1212,33 @@ class LexFlowApp {
     updateBreadcrumb(activeView) {
         const breadcrumbNav = document.getElementById('breadcrumb-nav');
         const currentSection = document.getElementById('current-section');
-        
+
         if (!breadcrumbNav || !currentSection) return;
-        
+
         const viewNames = {
             'home': 'Início',
             'workspace': 'Workspace Jurídico',
             'collector': 'Coletor & Curadoria',
             'settings': 'Configurações'
         };
-        
+
         if (activeView === 'home') {
             breadcrumbNav.classList.add('hidden');
         } else {
             breadcrumbNav.classList.remove('hidden');
             currentSection.textContent = viewNames[activeView] || activeView;
-            
+
             // Add step information for workspace
             if (activeView === 'workspace' && this.currentStep) {
                 const stepNames = {
-                    1: 'Jurisdição & Corpus',
-                    2: 'Leis & Artigos', 
-                    3: 'Prompt Studio'
+                    1: 'Leis & Artigos',
+                    2: 'Prompt Studio'
                 };
                 currentSection.textContent += ` › ${stepNames[this.currentStep]}`;
             }
         }
     }
-    
+
     /**
      * Update navigation badges with current status
      */
@@ -1251,7 +1250,7 @@ class LexFlowApp {
                 workspaceBadge.textContent = this.currentStep;
                 workspaceBadge.classList.remove('hidden');
                 workspaceBadge.className = 'nav-badge';
-                
+
                 // Add success class if step is completed
                 if (this.workspaceStepCompleted && this.workspaceStepCompleted[this.currentStep]) {
                     workspaceBadge.classList.add('success');
@@ -1260,7 +1259,7 @@ class LexFlowApp {
                 workspaceBadge.classList.add('hidden');
             }
         }
-        
+
         // Collector badge - show queue count
         const collectorBadge = document.getElementById('collector-badge');
         if (collectorBadge) {
@@ -1269,7 +1268,7 @@ class LexFlowApp {
                 collectorBadge.textContent = queueCount;
                 collectorBadge.classList.remove('hidden');
                 collectorBadge.className = 'nav-badge';
-                
+
                 if (queueCount > 5) {
                     collectorBadge.classList.add('warning');
                 }
@@ -1278,7 +1277,7 @@ class LexFlowApp {
             }
         }
     }
-    
+
     /**
      * Announce view changes to screen readers
      * @param {string} activeView - The currently active view
@@ -1290,11 +1289,11 @@ class LexFlowApp {
             'collector': 'Coletor e curadoria carregado',
             'settings': 'Configurações abertas'
         };
-        
+
         const announcement = viewNames[activeView] || `${activeView} carregado`;
         this.announceToScreenReader(announcement);
     }
-    
+
     /**
      * Manage focus when switching views
      * @param {string} activeView - The currently active view
@@ -1305,7 +1304,7 @@ class LexFlowApp {
         if (mainContent) {
             mainContent.focus();
         }
-        
+
         // Focus first interactive element in the view
         setTimeout(() => {
             const activeViewElement = document.getElementById(`${activeView}-view`);
@@ -1319,7 +1318,7 @@ class LexFlowApp {
             }
         }, 100);
     }
-    
+
     /**
      * Announce message to screen readers
      * @param {string} message - Message to announce
@@ -1330,15 +1329,15 @@ class LexFlowApp {
         announcement.setAttribute('aria-atomic', 'true');
         announcement.className = 'sr-only';
         announcement.textContent = message;
-        
+
         document.body.appendChild(announcement);
-        
+
         // Remove after announcement
         setTimeout(() => {
             document.body.removeChild(announcement);
         }, 1000);
     }
-    
+
     /**
      * Get current capture queue count
      * @returns {number} Number of items in capture queue
@@ -1356,7 +1355,7 @@ class LexFlowApp {
     async initViewFunctionality(viewName) {
         // Performance monitoring
         const initStart = performance.now();
-        
+
         try {
             // Use lazy loading for heavy views
             switch (viewName) {
@@ -1370,10 +1369,10 @@ class LexFlowApp {
                     await this.initCollectorView();
                     break;
             }
-            
+
             const initTime = performance.now() - initStart;
             console.log(`${viewName} view initialized in ${initTime.toFixed(2)}ms`);
-            
+
         } catch (error) {
             throw new Error(`Failed to initialize ${viewName} view: ${error.message}`);
         }
@@ -1388,16 +1387,16 @@ class LexFlowApp {
             card.addEventListener('click', (e) => {
                 const target = e.currentTarget.dataset.navigate;
                 const title = e.currentTarget.querySelector('.feature-title').textContent;
-                
+
                 // Add visual feedback
                 card.style.transform = 'scale(0.98)';
                 setTimeout(() => {
                     card.style.transform = '';
                 }, 150);
-                
+
                 // Show navigation toast
                 this.showToast(`Navegando para ${title}`, 'info', 1500);
-                
+
                 // Navigate after brief delay for better UX
                 setTimeout(() => {
                     this.navigate(target);
@@ -1419,36 +1418,33 @@ class LexFlowApp {
      */
     async initWorkspaceView() {
         const loadingToastId = this.showLoadingToast('Inicializando workspace...');
-        
+
         try {
             // Initialize step tracking
             this.initWorkspaceStepTracking();
-            
+
             // Step navigation
             await this.initWorkspaceSteps();
-            
+
             // Update loading message
             this.hideToast(loadingToastId);
             const configLoadingId = this.showLoadingToast('Carregando configurações...');
-            
-            // Step 1: Jurisdiction configuration
-            await this.initJurisdictionStep();
-            
-            // Step 2: Document search (lazy load)
+
+            // Step 1: Document search (now the first step)
             this.initDocumentSearchStep();
-            
-            // Step 3: Prompt studio (lazy load)
+
+            // Step 2: Prompt studio (lazy load)
             this.initPromptStudioStep();
-            
+
             this.hideToast(configLoadingId);
             const integrationLoadingId = this.showLoadingToast('Testando integrações...');
-            
+
             // Test integrations
             await this.testIntegrations();
-            
+
             this.hideToast(integrationLoadingId);
             this.showToast('Workspace pronto!', 'success', 2000);
-            
+
         } catch (error) {
             this.hideToast(loadingToastId);
             throw error;
@@ -1462,13 +1458,13 @@ class LexFlowApp {
         try {
             // Test Chrome AI availability
             this.chromeAIAvailable = await this.testChromeAI();
-            
+
             // Test markdown utilities
             this.markdownUtilsAvailable = await this.testMarkdownUtils();
-            
+
             // Update UI based on availability
             this.updateIntegrationStatus();
-            
+
         } catch (error) {
             console.error('Integration test failed:', error);
         }
@@ -1526,12 +1522,12 @@ class LexFlowApp {
         try {
             // Test if we can import markdown utilities
             const { fetchMarkdown, splitByArticles } = await import('../util/markdown.js');
-            
+
             if (typeof fetchMarkdown === 'function' && typeof splitByArticles === 'function') {
                 console.log('Markdown utilities available');
                 return true;
             }
-            
+
             return false;
         } catch (error) {
             console.warn('Markdown utilities test failed:', error);
@@ -1545,7 +1541,7 @@ class LexFlowApp {
     updateIntegrationStatus() {
         // Add status indicators to the workspace
         this.addIntegrationStatusIndicators();
-        
+
         // Update AI button state
         const executeBtn = document.getElementById('execute-ai');
         if (executeBtn) {
@@ -1648,7 +1644,7 @@ class LexFlowApp {
                 text-decoration: underline;
             }
         `;
-        
+
         document.head.appendChild(style);
     }
 
@@ -1712,7 +1708,7 @@ class LexFlowApp {
      */
     handleAIError(error, context = 'AI operation') {
         console.error(`${context} error:`, error);
-        
+
         let userMessage = 'Erro na operação de IA';
         let suggestion = '';
 
@@ -1728,7 +1724,7 @@ class LexFlowApp {
         }
 
         this.showToast(`${userMessage}. ${suggestion}`, 'error', 5000);
-        
+
         // Log detailed error for debugging
         console.error('Detailed AI error:', {
             message: error.message,
@@ -1745,7 +1741,7 @@ class LexFlowApp {
      */
     handleMarkdownError(error, context = 'Markdown operation') {
         console.error(`${context} error:`, error);
-        
+
         let userMessage = 'Erro ao processar documento';
         let suggestion = '';
 
@@ -1767,21 +1763,13 @@ class LexFlowApp {
      * Initialize workspace step navigation
      */
     initWorkspaceSteps() {
-        // Step navigation buttons
-        document.getElementById('save-jurisdiction')?.addEventListener('click', () => {
-            this.saveJurisdictionAndContinue();
+        // Step navigation buttons - updated for 2-step flow
+        document.getElementById('next-step-1')?.addEventListener('click', () => {
+            this.goToWorkspaceStep(2);
         });
 
         document.getElementById('prev-step-2')?.addEventListener('click', () => {
             this.goToWorkspaceStep(1);
-        });
-
-        document.getElementById('next-step-2')?.addEventListener('click', () => {
-            this.goToWorkspaceStep(3);
-        });
-
-        document.getElementById('prev-step-3')?.addEventListener('click', () => {
-            this.goToWorkspaceStep(2);
         });
 
         // Direct step navigation with keyboard support
@@ -1790,11 +1778,11 @@ class LexFlowApp {
                 const stepNumber = parseInt(e.currentTarget.dataset.step);
                 this.goToWorkspaceStep(stepNumber);
             });
-            
+
             // Keyboard navigation for steps
             step.addEventListener('keydown', (e) => {
                 const stepNumber = parseInt(e.currentTarget.dataset.step);
-                
+
                 switch (e.key) {
                     case 'Enter':
                     case ' ':
@@ -1809,7 +1797,7 @@ class LexFlowApp {
                         break;
                     case 'ArrowRight':
                         e.preventDefault();
-                        if (stepNumber < 3) {
+                        if (stepNumber < 2) {
                             this.goToWorkspaceStep(stepNumber + 1);
                         }
                         break;
@@ -1819,7 +1807,7 @@ class LexFlowApp {
                         break;
                     case 'End':
                         e.preventDefault();
-                        this.goToWorkspaceStep(3);
+                        this.goToWorkspaceStep(2);
                         break;
                 }
             });
@@ -1831,14 +1819,14 @@ class LexFlowApp {
      * @param {number} stepNumber - The step number to navigate to
      */
     goToWorkspaceStep(stepNumber) {
-        if (stepNumber < 1 || stepNumber > 3) return;
-        
+        if (stepNumber < 1 || stepNumber > 2) return;
+
         // Update step indicators with ARIA attributes
         document.querySelectorAll('.step').forEach((step, index) => {
             step.classList.remove('active', 'completed');
             step.setAttribute('aria-selected', 'false');
             step.setAttribute('tabindex', '-1');
-            
+
             if (index + 1 === stepNumber) {
                 step.classList.add('active');
                 step.setAttribute('aria-selected', 'true');
@@ -1852,7 +1840,7 @@ class LexFlowApp {
         document.querySelectorAll('.step-content').forEach((content, index) => {
             content.classList.remove('active');
             content.setAttribute('aria-hidden', 'true');
-            
+
             if (index + 1 === stepNumber) {
                 content.classList.add('active');
                 content.setAttribute('aria-hidden', 'false');
@@ -1860,19 +1848,18 @@ class LexFlowApp {
         });
 
         this.currentStep = stepNumber;
-        
+
         // Update breadcrumb and navigation
         this.updateBreadcrumb('workspace');
         this.updateNavigationBadges();
-        
+
         // Announce step change to screen readers
         const stepNames = {
-            1: 'Jurisdição e Corpus',
-            2: 'Leis e Artigos',
-            3: 'Prompt Studio'
+            1: 'Leis & Artigos',
+            2: 'Prompt Studio'
         };
         this.announceToScreenReader(`Navegou para etapa ${stepNumber}: ${stepNames[stepNumber]}`);
-        
+
         // Focus management for the new step
         setTimeout(() => {
             const activeStepContent = document.querySelector('.step-content.active');
@@ -1885,7 +1872,7 @@ class LexFlowApp {
                 }
             }
         }, 100);
-        
+
         this.showToast(`Navegando para Etapa ${stepNumber}`, 'info', 1500);
     }
 
@@ -1895,13 +1882,13 @@ class LexFlowApp {
     initJurisdictionStep() {
         // Load saved settings
         this.loadJurisdictionSettings();
-        
+
         // Add real-time validation with accessibility
         const step1Container = document.getElementById('step-1');
         if (step1Container) {
             this.addRealTimeValidation(step1Container);
         }
-        
+
         // Add form field event listeners
         this.initJurisdictionEventListeners();
     }
@@ -1911,7 +1898,7 @@ class LexFlowApp {
      */
     initJurisdictionValidation() {
         const fields = ['language', 'country', 'state', 'city', 'corpus-url'];
-        
+
         fields.forEach(fieldId => {
             const field = document.getElementById(fieldId);
             if (field) {
@@ -1919,12 +1906,12 @@ class LexFlowApp {
                 field.addEventListener('blur', () => {
                     this.validateJurisdictionField(fieldId);
                 });
-                
+
                 // Clear validation on focus
                 field.addEventListener('focus', () => {
                     this.clearJurisdictionFieldValidation(fieldId);
                 });
-                
+
                 // Auto-save on change for better UX
                 field.addEventListener('change', () => {
                     this.autoSaveJurisdictionSettings();
@@ -1944,7 +1931,7 @@ class LexFlowApp {
                 this.updateStateOptions();
             });
         }
-        
+
         // Corpus URL validation and testing
         const corpusField = document.getElementById('corpus-url');
         if (corpusField) {
@@ -2037,14 +2024,14 @@ class LexFlowApp {
      */
     showFieldError(field, message) {
         this.clearFieldError(field);
-        
+
         const errorDiv = document.createElement('div');
         errorDiv.className = 'field-error';
         errorDiv.style.color = 'var(--pico-del-color)';
         errorDiv.style.fontSize = '0.8rem';
         errorDiv.style.marginTop = '0.25rem';
         errorDiv.textContent = message;
-        
+
         field.parentNode.appendChild(errorDiv);
     }
 
@@ -2055,14 +2042,14 @@ class LexFlowApp {
      */
     showFieldWarning(field, message) {
         this.clearFieldError(field);
-        
+
         const warningDiv = document.createElement('div');
         warningDiv.className = 'field-warning';
         warningDiv.style.color = 'var(--pico-color)';
         warningDiv.style.fontSize = '0.8rem';
         warningDiv.style.marginTop = '0.25rem';
         warningDiv.textContent = message;
-        
+
         field.parentNode.appendChild(warningDiv);
     }
 
@@ -2081,14 +2068,14 @@ class LexFlowApp {
     updateStateOptions() {
         const countryField = document.getElementById('country');
         const stateField = document.getElementById('state');
-        
+
         if (!countryField || !stateField) return;
-        
+
         const country = countryField.value;
-        
+
         // Clear current state value
         stateField.value = '';
-        
+
         // Update placeholder based on country
         switch (country) {
             case 'br':
@@ -2129,7 +2116,7 @@ class LexFlowApp {
             // Test if URL is accessible
             const testUrl = url.endsWith('/') ? url + 'README.md' : url + '/README.md';
             const response = await fetch(testUrl, { method: 'HEAD' });
-            
+
             if (response.ok) {
                 corpusField.classList.remove('error');
                 corpusField.classList.add('success');
@@ -2157,7 +2144,7 @@ class LexFlowApp {
      */
     async saveJurisdictionSettingsQuietly() {
         const settings = this.getJurisdictionSettings();
-        
+
         try {
             // Save to IndexedDB using existing db.js
             try {
@@ -2193,7 +2180,7 @@ class LexFlowApp {
         // Validate all fields first
         const fields = ['language', 'country', 'state', 'city', 'corpus-url'];
         let isValid = true;
-        
+
         fields.forEach(fieldId => {
             if (!this.validateJurisdictionField(fieldId)) {
                 isValid = false;
@@ -2214,12 +2201,12 @@ class LexFlowApp {
 
         const saveBtn = document.getElementById('save-jurisdiction');
         const originalText = saveBtn.textContent;
-        
+
         try {
             // Show loading state
             saveBtn.disabled = true;
             saveBtn.textContent = 'Salvando...';
-            
+
             // Save to IndexedDB
             try {
                 await setSetting('jurisdiction-config', settings);
@@ -2227,17 +2214,17 @@ class LexFlowApp {
                 console.warn('Failed to save to IndexedDB, using localStorage fallback:', error);
                 localStorage.setItem('lexflow-jurisdiction', JSON.stringify(settings));
             }
-            
+
             this.showToast('Configuração de jurisdição salva!', 'success');
-            
+
             // Mark step as completed
             document.querySelector('.step[data-step="1"]').classList.add('completed');
-            
-            // Continue to next step after brief delay
+
+            // Continue to document selection step after brief delay
             setTimeout(() => {
-                this.goToWorkspaceStep(2);
+                this.goToWorkspaceStep(1);
             }, 1000);
-            
+
         } catch (error) {
             console.error('Error saving jurisdiction settings:', error);
             this.showToast('Erro ao salvar configurações', 'error');
@@ -2254,14 +2241,14 @@ class LexFlowApp {
     async loadJurisdictionSettings() {
         try {
             let settings = null;
-            
+
             // Try IndexedDB first
             try {
                 settings = await getSetting('jurisdiction-config');
             } catch (error) {
                 console.warn('Failed to load from IndexedDB:', error);
             }
-            
+
             // Fallback to localStorage
             if (!settings) {
                 const saved = localStorage.getItem('lexflow-jurisdiction');
@@ -2269,7 +2256,7 @@ class LexFlowApp {
                     settings = JSON.parse(saved);
                 }
             }
-            
+
             // Load from app settings if jurisdiction config doesn't exist
             if (!settings) {
                 const appSettings = await this.loadSettings();
@@ -2283,7 +2270,7 @@ class LexFlowApp {
                     };
                 }
             }
-            
+
             if (settings) {
                 // Populate form fields
                 document.getElementById('language').value = settings.language || 'pt-BR';
@@ -2291,10 +2278,10 @@ class LexFlowApp {
                 document.getElementById('state').value = settings.state || '';
                 document.getElementById('city').value = settings.city || '';
                 document.getElementById('corpus-url').value = settings.corpusUrl || '';
-                
+
                 // Update state options based on country
                 this.updateStateOptions();
-                
+
                 // Mark step as completed if all required fields are filled
                 if (settings.language && settings.country) {
                     document.querySelector('.step[data-step="1"]').classList.add('completed');
@@ -2312,7 +2299,7 @@ class LexFlowApp {
         this.initDocumentDropdown();
         this.initArticleSearch();
         this.initArticleSelection();
-        
+
         // Load available documents when step is accessed
         this.loadAvailableDocuments();
     }
@@ -2351,7 +2338,7 @@ class LexFlowApp {
     initArticleSelection() {
         this.selectedArticles = new Set();
         this.allArticles = [];
-        
+
         // Update context when articles are selected/deselected
         document.addEventListener('change', (e) => {
             if (e.target.matches('.article-checkbox')) {
@@ -2373,7 +2360,7 @@ class LexFlowApp {
             // Get corpus URL from jurisdiction settings
             const settings = await this.getJurisdictionSettings();
             const corpusUrl = settings.corpusUrl;
-            
+
             if (!corpusUrl) {
                 this.hideToast(loadingToastId);
                 this.showToast('Configure a URL do corpus na Etapa 1', 'error');
@@ -2387,27 +2374,27 @@ class LexFlowApp {
             // Check cache first for performance
             const cacheKey = `documents-${btoa(corpusUrl)}`;
             const cachedData = this.getCachedData(cacheKey, 5 * 60 * 1000); // 5 minutes cache
-            
+
             let documents = [];
-            
+
             if (cachedData) {
                 documents = cachedData;
                 console.log('Using cached documents');
             } else {
                 // Fetch document list with timeout
                 const documentsUrl = corpusUrl.endsWith('/') ? corpusUrl + 'documents.json' : corpusUrl + '/documents.json';
-                
+
                 try {
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-                    
-                    const response = await fetch(documentsUrl, { 
+
+                    const response = await fetch(documentsUrl, {
                         signal: controller.signal,
                         cache: 'default'
                     });
-                    
+
                     clearTimeout(timeoutId);
-                    
+
                     if (response.ok) {
                         documents = await response.json();
                         // Cache the results
@@ -2451,7 +2438,7 @@ class LexFlowApp {
         } catch (error) {
             this.hideToast(loadingToastId);
             this.handleNetworkError(error, 'Loading documents', settings?.corpusUrl);
-            
+
             documentSelect.innerHTML = '<option value="">Erro ao carregar documentos</option>';
             documentSelect.disabled = false;
         }
@@ -2489,7 +2476,7 @@ class LexFlowApp {
     async loadDocumentArticles() {
         const documentSelect = document.getElementById('document-select');
         const articlesContainer = document.getElementById('articles-list');
-        
+
         if (!documentSelect || !articlesContainer) return;
 
         const selectedOption = documentSelect.selectedOptions[0];
@@ -2503,77 +2490,77 @@ class LexFlowApp {
         try {
             // Get document URL
             const documentUrl = selectedOption.dataset.url;
-            
+
             // Check cache first
             const cacheKey = `articles-${btoa(documentUrl)}`;
             const cachedArticles = this.getCachedData(cacheKey, 10 * 60 * 1000); // 10 minutes cache
-            
+
             let articles;
-            
+
             if (cachedArticles) {
                 articles = cachedArticles;
                 console.log('Using cached articles');
                 this.hideToast(loadingToastId);
                 const cacheToastId = this.showLoadingToast('Renderizando artigos...');
-                
+
                 // Defer rendering to next frame for better UX
                 await new Promise(resolve => requestAnimationFrame(resolve));
-                
+
                 this.allArticles = articles;
                 this.renderArticles(articles);
-                
+
                 this.hideToast(cacheToastId);
                 this.showToast(`${articles.length} artigos carregados (cache)`, 'success', 2000);
             } else {
                 // Show loading state
                 articlesContainer.innerHTML = '<p class="muted">Carregando artigos...</p>';
-                
+
                 // Dynamic import for better performance
                 const { fetchMarkdown, splitByArticles } = await import('../util/markdown.js');
-                
+
                 // Update loading message
                 this.hideToast(loadingToastId);
                 const fetchToastId = this.showLoadingToast('Baixando documento...');
-                
+
                 // Fetch with timeout and progress
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-                
+
                 const markdownText = await fetchMarkdown(documentUrl, { signal: controller.signal });
                 clearTimeout(timeoutId);
-                
+
                 this.hideToast(fetchToastId);
                 const parseToastId = this.showLoadingToast('Processando artigos...');
-                
+
                 // Parse articles with progress feedback
                 articles = await this.parseArticlesWithProgress(markdownText, splitByArticles);
-                
+
                 // Cache the results
                 this.setCachedData(cacheKey, articles);
-                
+
                 this.allArticles = articles;
-                
+
                 this.hideToast(parseToastId);
                 const renderToastId = this.showLoadingToast('Renderizando interface...');
-                
+
                 // Defer rendering to prevent blocking
                 await new Promise(resolve => setTimeout(resolve, 0));
-                
+
                 this.renderArticles(articles);
-                
+
                 this.hideToast(renderToastId);
                 this.showToast(`${articles.length} artigos carregados`, 'success', 2000);
             }
 
         } catch (error) {
             this.hideToast(loadingToastId);
-            
+
             if (error.name === 'AbortError') {
                 this.handleNetworkError(new Error('Timeout ao carregar documento'), 'Loading document articles', selectedOption.dataset.url);
             } else {
                 this.handleMarkdownError(error, 'Loading document articles');
             }
-            
+
             articlesContainer.innerHTML = '<p class="error">Erro ao carregar artigos do documento</p>';
         }
     }
@@ -2618,7 +2605,7 @@ class LexFlowApp {
 
         // Performance optimization: use virtual scrolling for large lists
         const useVirtualScrolling = articles.length > 50;
-        
+
         if (useVirtualScrolling) {
             this.renderArticlesVirtual(articles, articlesContainer);
         } else {
@@ -2637,19 +2624,19 @@ class LexFlowApp {
     renderArticlesVirtual(articles, container) {
         const itemHeight = 120; // Estimated height per article
         const visibleItems = Math.ceil(container.clientHeight / itemHeight) + 5; // Buffer
-        
+
         let scrollTop = 0;
         let startIndex = 0;
         let endIndex = Math.min(visibleItems, articles.length);
 
         const renderVisibleItems = () => {
             const fragment = document.createDocumentFragment();
-            
+
             for (let i = startIndex; i < endIndex; i++) {
                 const article = articles[i];
                 const isSelected = this.selectedArticles.has(i);
-                const preview = article.text.length > 200 ? 
-                    article.text.substring(0, 200) + '...' : 
+                const preview = article.text.length > 200 ?
+                    article.text.substring(0, 200) + '...' :
                     article.text;
 
                 const articleDiv = document.createElement('div');
@@ -2670,7 +2657,7 @@ class LexFlowApp {
                 `;
                 fragment.appendChild(articleDiv);
             }
-            
+
             return fragment;
         };
 
@@ -2682,7 +2669,7 @@ class LexFlowApp {
             if (newStartIndex !== startIndex || newEndIndex !== endIndex) {
                 startIndex = newStartIndex;
                 endIndex = newEndIndex;
-                
+
                 // Clear and re-render visible items
                 const articlesWrapper = container.querySelector('.articles-container');
                 articlesWrapper.innerHTML = '';
@@ -2727,11 +2714,11 @@ class LexFlowApp {
     renderArticlesStandard(articles, container) {
         // Use document fragment for better performance
         const fragment = document.createDocumentFragment();
-        
+
         articles.forEach((article, index) => {
             const isSelected = this.selectedArticles.has(index);
-            const preview = article.text.length > 200 ? 
-                article.text.substring(0, 200) + '...' : 
+            const preview = article.text.length > 200 ?
+                article.text.substring(0, 200) + '...' :
                 article.text;
 
             const articleDiv = document.createElement('div');
@@ -2853,7 +2840,7 @@ class LexFlowApp {
                 margin-left: 1.5rem;
             }
         `;
-        
+
         document.head.appendChild(style);
     }
 
@@ -2862,21 +2849,21 @@ class LexFlowApp {
      */
     filterArticles() {
         const searchTerm = document.getElementById('search-term')?.value.toLowerCase() || '';
-        
+
         if (!searchTerm) {
             this.renderArticles(this.allArticles);
             return;
         }
 
-        const filteredArticles = this.allArticles.filter(article => 
+        const filteredArticles = this.allArticles.filter(article =>
             article.title.toLowerCase().includes(searchTerm) ||
             article.text.toLowerCase().includes(searchTerm)
         );
 
         this.renderArticles(filteredArticles);
-        
+
         if (filteredArticles.length === 0) {
-            document.getElementById('articles-list').innerHTML = 
+            document.getElementById('articles-list').innerHTML =
                 '<p class="muted">Nenhum artigo encontrado para o termo de busca</p>';
         }
     }
@@ -2937,8 +2924,8 @@ class LexFlowApp {
         contextArea.value = selectedTexts.join('\n\n---\n\n');
         contextArea.placeholder = '';
 
-        // Update button state
-        const nextBtn = document.getElementById('next-step-2');
+        // Update button state - step 1 now goes to step 2 (Prompt Studio)
+        const nextBtn = document.getElementById('next-step-1');
         if (nextBtn) {
             nextBtn.disabled = this.selectedArticles.size === 0;
         }
@@ -2975,7 +2962,7 @@ class LexFlowApp {
     initPromptParameters() {
         // Add parameters container if it doesn't exist
         this.createParametersContainer();
-        
+
         // Custom prompt textarea
         const customPrompt = document.getElementById('custom-prompt');
         if (customPrompt) {
@@ -3077,12 +3064,14 @@ class LexFlowApp {
                 description: 'Foca na aplicação prática e casos de uso',
                 template: 'Explique a aplicação prática dos seguintes artigos legais:\n1. Quando se aplicam\n2. Procedimentos necessários\n3. Documentação exigida\n4. Prazos e requisitos\n5. Exemplos práticos\n\nContexto específico: {context_type}\n\nArtigos:\n{context}',
                 parameters: [
-                    { name: 'context_type', label: 'Contexto de Aplicação', type: 'select', options: [
-                        { value: 'empresarial', label: 'Contexto Empresarial' },
-                        { value: 'individual', label: 'Pessoa Física' },
-                        { value: 'publico', label: 'Administração Pública' },
-                        { value: 'judicial', label: 'Processo Judicial' }
-                    ]}
+                    {
+                        name: 'context_type', label: 'Contexto de Aplicação', type: 'select', options: [
+                            { value: 'empresarial', label: 'Contexto Empresarial' },
+                            { value: 'individual', label: 'Pessoa Física' },
+                            { value: 'publico', label: 'Administração Pública' },
+                            { value: 'judicial', label: 'Processo Judicial' }
+                        ]
+                    }
                 ]
             },
             'custom': {
@@ -3094,13 +3083,13 @@ class LexFlowApp {
         };
 
         this.promptPresets = presets;
-        
+
         // Update preset select options
         const presetSelect = document.getElementById('preset-select');
         if (presetSelect) {
             // Clear existing options except the first one
             presetSelect.innerHTML = '<option value="">Selecione um preset...</option>';
-            
+
             Object.keys(presets).forEach(key => {
                 const preset = presets[key];
                 const option = document.createElement('option');
@@ -3120,11 +3109,11 @@ class LexFlowApp {
         const customPrompt = document.getElementById('custom-prompt');
         const parametersContainer = document.getElementById('parameters-container');
         const parametersDiv = document.getElementById('prompt-parameters');
-        
+
         if (!presetSelect || !customPrompt) return;
 
         const selectedPreset = presetSelect.value;
-        
+
         if (!selectedPreset || selectedPreset === 'custom') {
             // Hide parameters for custom preset
             if (parametersDiv) parametersDiv.style.display = 'none';
@@ -3164,10 +3153,10 @@ class LexFlowApp {
 
         const parametersHtml = parameters.map(param => {
             if (param.type === 'select') {
-                const options = param.options.map(opt => 
+                const options = param.options.map(opt =>
                     `<option value="${opt.value}">${opt.label}</option>`
                 ).join('');
-                
+
                 return `
                     <div class="parameter-field mb-1">
                         <label for="param-${param.name}">${param.label}:</label>
@@ -3209,7 +3198,7 @@ class LexFlowApp {
         if (!customPrompt) return;
 
         let promptText = customPrompt.value;
-        
+
         // Replace parameter placeholders
         const paramInputs = document.querySelectorAll('[data-param]');
         paramInputs.forEach(input => {
@@ -3229,20 +3218,20 @@ class LexFlowApp {
     getFinalPrompt() {
         const contextArea = document.getElementById('selected-context');
         const context = contextArea ? contextArea.value : '';
-        
+
         if (!context) {
             throw new Error('Nenhum contexto selecionado. Volte à Etapa 2 e selecione artigos.');
         }
 
         let prompt = this.processedPrompt || document.getElementById('custom-prompt')?.value || '';
-        
+
         if (!prompt) {
             throw new Error('Nenhum prompt definido. Selecione um preset ou digite um prompt personalizado.');
         }
 
         // Replace context placeholder
         prompt = prompt.replace(/\{context\}/g, context);
-        
+
         return prompt;
     }
 
@@ -3252,30 +3241,30 @@ class LexFlowApp {
     async executeAI() {
         const executeBtn = document.getElementById('execute-ai');
         const outputArea = document.getElementById('ai-output');
-        
+
         if (!executeBtn || !outputArea) return;
 
         try {
             // Validate inputs
             const finalPrompt = this.getFinalPrompt();
-            
+
             // Show loading state
             executeBtn.disabled = true;
             executeBtn.textContent = '🤖 Processando...';
             outputArea.value = 'Processando com IA...';
-            
+
             this.showToast('Executando IA...', 'info');
-            
+
             // Try to use Chrome AI
             let result;
             try {
                 // Import Chrome AI utilities
                 const { promptOnDevice, summarizeOnDevice } = await import('../ai/chrome-ai.js');
-                
+
                 // Determine if this is a summarization or general prompt
                 const presetSelect = document.getElementById('preset-select');
                 const selectedPreset = presetSelect?.value;
-                
+
                 if (selectedPreset === 'summary') {
                     // Use summarizer for summary preset
                     const contextArea = document.getElementById('selected-context');
@@ -3286,30 +3275,30 @@ class LexFlowApp {
                     const systemPrompt = 'Você é um assistente jurídico especializado em análise de legislação brasileira. Forneça respostas precisas, bem estruturadas e baseadas no contexto fornecido.';
                     result = await promptOnDevice(systemPrompt, finalPrompt);
                 }
-                
+
                 this.showToast('IA executada com sucesso!', 'success');
-                
+
             } catch (aiError) {
                 this.handleAIError(aiError, 'Chrome AI execution');
-                
+
                 // Fallback: simulate AI response based on prompt type
                 result = this.generateFallbackResponse(finalPrompt);
-                
+
                 this.showToast('Usando modo simulado', 'info');
             }
-            
+
             // Display result
             outputArea.value = result;
-            
+
             // Show export buttons
             const exportButtons = document.getElementById('export-buttons');
             if (exportButtons) {
                 exportButtons.style.display = 'block';
             }
-            
+
             // Save to history
             this.saveExecutionToHistory(finalPrompt, result);
-            
+
         } catch (error) {
             this.handleAIError(error, 'AI execution');
             outputArea.value = `Erro na execução: ${error.message}`;
@@ -3327,7 +3316,7 @@ class LexFlowApp {
     generateFallbackResponse(prompt) {
         const presetSelect = document.getElementById('preset-select');
         const selectedPreset = presetSelect?.value;
-        
+
         const fallbackResponses = {
             'summary': `RESUMO LEGAL (Simulado)
 
@@ -3462,7 +3451,7 @@ NOTA: Esta é uma demonstração. A funcionalidade completa requer Chrome AI ati
     exportAsMarkdown() {
         const outputArea = document.getElementById('ai-output');
         const presetSelect = document.getElementById('preset-select');
-        
+
         if (!outputArea || !outputArea.value) {
             this.showToast('Nenhum resultado para exportar', 'error');
             return;
@@ -3471,7 +3460,7 @@ NOTA: Esta é uma demonstração. A funcionalidade completa requer Chrome AI ati
         const preset = presetSelect?.value || 'custom';
         const presetName = this.promptPresets[preset]?.name || 'Análise Personalizada';
         const timestamp = new Date().toLocaleString('pt-BR');
-        
+
         const markdown = `# ${presetName}
 
 **Data:** ${timestamp}
@@ -3509,7 +3498,7 @@ ${outputArea.value}
     async saveToHistory() {
         const outputArea = document.getElementById('ai-output');
         const customPrompt = document.getElementById('custom-prompt');
-        
+
         if (!outputArea || !outputArea.value) {
             this.showToast('Nenhum resultado para salvar', 'error');
             return;
@@ -3550,30 +3539,30 @@ ${outputArea.value}
      */
     async initCollectorView() {
         const loadingToastId = this.showLoadingToast('Inicializando coletor...');
-        
+
         try {
             console.log('Collector view initialized');
-            
+
             // Initialize collector state
             this.selectedQueueItem = null;
             this.queueItems = [];
-            
+
             // Load queue items from database with loading feedback
             this.hideToast(loadingToastId);
             const queueLoadingId = this.showLoadingToast('Carregando fila de captura...');
-            
+
             await this.loadQueueItems();
-            
+
             this.hideToast(queueLoadingId);
-            
+
             // Set up auto-refresh for queue (lazy)
             this.setupQueueAutoRefresh();
-            
+
             // Initialize event listeners (lazy)
             this.initCollectorEventListeners();
-            
+
             this.showToast('Coletor pronto!', 'success', 2000);
-            
+
         } catch (error) {
             this.hideToast(loadingToastId);
             throw error;
@@ -3591,7 +3580,7 @@ ${outputArea.value}
                 this.loadQueueItems();
             });
         }
-        
+
         // Clear queue button (if exists)
         const clearBtn = document.getElementById('clear-queue');
         if (clearBtn) {
@@ -3609,7 +3598,7 @@ ${outputArea.value}
         this.queueRefreshInterval = setInterval(() => {
             this.loadQueueItems();
         }, 30000);
-        
+
         // Clear interval when leaving collector view
         const originalShowView = this.showView.bind(this);
         this.showView = (viewName) => {
@@ -3630,19 +3619,19 @@ ${outputArea.value}
         try {
             // Import database functions
             const { listSubmissions } = await import('../db.js');
-            
+
             // Load all submissions (queued, editing, ready)
             const submissions = await listSubmissions();
-            
+
             // Filter out deleted items and sort by timestamp (newest first)
             this.queueItems = submissions
                 .filter(item => item.status !== 'deleted')
                 .sort((a, b) => b.ts - a.ts);
-            
+
             // Update UI
             this.renderQueueItems();
             this.updateQueueCount(this.queueItems.length);
-            
+
         } catch (error) {
             console.error('Error loading queue items:', error);
             this.showToast('Erro ao carregar fila de captura', 'error');
@@ -3676,13 +3665,13 @@ ${outputArea.value}
             const statusIcon = this.getStatusIcon(item.status);
             const modeIcon = item.mode === 'full' ? '📄' : '📝';
             const timeAgo = this.formatTimeAgo(item.ts);
-            
+
             // Truncate title and text for preview
-            const title = item.title ? 
+            const title = item.title ?
                 (item.title.length > 50 ? item.title.substring(0, 50) + '...' : item.title) :
                 'Sem título';
-            
-            const preview = item.selectionText ? 
+
+            const preview = item.selectionText ?
                 (item.selectionText.length > 100 ? item.selectionText.substring(0, 100) + '...' : item.selectionText) :
                 'Sem conteúdo';
 
@@ -3787,21 +3776,21 @@ ${outputArea.value}
             }
 
             this.selectedQueueItem = item;
-            
+
             // Update UI selection
             document.querySelectorAll('.queue-item').forEach(el => {
                 el.classList.remove('selected');
             });
             document.querySelector(`[data-id="${itemId}"]`)?.classList.add('selected');
-            
+
             // Load item in editor
             this.loadItemInEditor(item);
-            
+
             // Update item status to editing if it was queued
             if (item.status === 'queued') {
                 await this.updateItemStatus(itemId, 'editing');
             }
-            
+
         } catch (error) {
             console.error('Error selecting queue item:', error);
             this.showToast('Erro ao selecionar item', 'error');
@@ -3817,16 +3806,16 @@ ${outputArea.value}
         try {
             const { updateSubmission } = await import('../db.js');
             await updateSubmission(itemId, { status });
-            
+
             // Update local item
             const item = this.queueItems.find(i => i.id === itemId);
             if (item) {
                 item.status = status;
             }
-            
+
             // Re-render queue to show updated status
             this.renderQueueItems();
-            
+
         } catch (error) {
             console.error('Error updating item status:', error);
             this.showToast('Erro ao atualizar status do item', 'error');
@@ -3902,7 +3891,7 @@ ${outputArea.value}
         `;
 
         editorContent.innerHTML = editorHtml;
-        
+
         // Add form validation
         this.initEditorValidation();
     }
@@ -3926,14 +3915,14 @@ ${outputArea.value}
 
         // Add real-time validation
         const fields = ['edit-title', 'edit-jurisdiction', 'edit-source-url', 'edit-content'];
-        
+
         fields.forEach(fieldId => {
             const field = document.getElementById(fieldId);
             if (field) {
                 field.addEventListener('blur', () => {
                     this.validateEditorField(fieldId);
                 });
-                
+
                 field.addEventListener('input', () => {
                     this.clearEditorFieldValidation(fieldId);
                 });
@@ -4023,14 +4012,14 @@ ${outputArea.value}
      */
     showEditorFieldError(field, message) {
         this.clearEditorFieldError(field);
-        
+
         const errorDiv = document.createElement('div');
         errorDiv.className = 'editor-field-error';
         errorDiv.style.color = 'var(--pico-del-color)';
         errorDiv.style.fontSize = '0.8rem';
         errorDiv.style.marginTop = '0.25rem';
         errorDiv.textContent = message;
-        
+
         field.parentNode.appendChild(errorDiv);
     }
 
@@ -4055,7 +4044,7 @@ ${outputArea.value}
         // Validate form
         const fields = ['edit-title', 'edit-jurisdiction', 'edit-source-url', 'edit-content'];
         let isValid = true;
-        
+
         fields.forEach(fieldId => {
             if (!this.validateEditorField(fieldId)) {
                 isValid = false;
@@ -4118,7 +4107,7 @@ ${outputArea.value}
             // Clear editor if this item was selected
             if (this.selectedQueueItem && this.selectedQueueItem.id === itemId) {
                 this.selectedQueueItem = null;
-                document.getElementById('editor-content').innerHTML = 
+                document.getElementById('editor-content').innerHTML =
                     '<p class="muted text-center">Selecione um item da fila para editar</p>';
             }
 
@@ -4145,7 +4134,7 @@ ${outputArea.value}
         try {
             // Mark all items as deleted
             const { updateSubmission } = await import('../db.js');
-            
+
             for (const item of this.queueItems) {
                 await updateSubmission(item.id, { status: 'deleted' });
             }
@@ -4157,7 +4146,7 @@ ${outputArea.value}
             // Update UI
             this.renderQueueItems();
             this.updateQueueCount(0);
-            document.getElementById('editor-content').innerHTML = 
+            document.getElementById('editor-content').innerHTML =
                 '<p class="muted text-center">Selecione um item da fila para editar</p>';
 
             this.showToast('Fila limpa com sucesso', 'success');
@@ -4306,7 +4295,7 @@ ${outputArea.value}
                 }
             }
         `;
-        
+
         document.head.appendChild(style);
     }
 
@@ -4332,9 +4321,9 @@ ${outputArea.value}
             if (modalName === 'settings') {
                 await this.loadSettings();
             }
-            
+
             modal.classList.add('active');
-            
+
             // Focus first input
             const firstInput = modal.querySelector('input, select, textarea');
             if (firstInput) {
@@ -4438,7 +4427,7 @@ ${outputArea.value}
             'warning',
             0,
             'Entendi',
-            () => {} // Just dismiss
+            () => { } // Just dismiss
         );
     }
 
@@ -4538,7 +4527,7 @@ ${outputArea.value}
                 const view = e.currentTarget.dataset.view;
                 this.navigate(view);
             });
-            
+
             // Keyboard navigation for tabs
             tab.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -4548,7 +4537,7 @@ ${outputArea.value}
                 }
             });
         });
-        
+
         // Global keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             this.handleGlobalKeyboard(e);
@@ -4758,23 +4747,23 @@ ${outputArea.value}
                 // Fallback to localStorage
                 localStorage.setItem('lexflow-settings', JSON.stringify(settings));
             }
-            
+
             // Enhanced success message with serverless endpoint feedback
             let successMessage = 'Configurações salvas com sucesso!';
             const serverlessEndpoint = document.getElementById('settings-serverless-endpoint').value.trim();
-            
+
             if (serverlessEndpoint) {
                 successMessage += ' Integração serverless configurada e pronta para uso.';
             } else {
                 successMessage += ' Para usar integração automática, configure o endpoint serverless.';
             }
-            
+
             this.showToast(successMessage, 'success', 6000);
             this.hideModal('settings');
-            
+
             // Update jurisdiction fields in workspace if they're empty
             this.updateWorkspaceFromSettings(settings);
-            
+
         } catch (error) {
             console.error('Error saving settings:', error);
             this.showToast('Erro ao salvar configurações', 'error');
@@ -4795,20 +4784,20 @@ ${outputArea.value}
     async loadSettings() {
         try {
             let settings = null;
-            
+
             // Try to load from IndexedDB first
             try {
                 settings = await getSetting('app-settings');
             } catch (error) {
                 console.warn('Failed to load from IndexedDB:', error);
             }
-            
+
             // Fallback to localStorage
             if (!settings) {
                 const saved = localStorage.getItem('lexflow-settings');
                 if (saved) {
                     settings = JSON.parse(saved);
-                    
+
                     // Migration: Remove any legacy github-token from loaded settings
                     // This ensures old token data doesn't cause issues
                     if (settings && settings['github-token']) {
@@ -4817,13 +4806,13 @@ ${outputArea.value}
                     }
                 }
             }
-            
+
             if (settings) {
                 // Migration: Clean up any legacy github-token from settings
                 if (settings['github-token']) {
                     delete settings['github-token'];
                     console.log('Removed legacy github-token from IndexedDB settings during migration');
-                    
+
                     // Save cleaned settings back to storage
                     try {
                         await setSetting('app-settings', settings);
@@ -4831,7 +4820,7 @@ ${outputArea.value}
                         console.warn('Failed to save cleaned settings:', error);
                     }
                 }
-                
+
                 // Populate settings form
                 document.getElementById('settings-language').value = settings.language || 'pt-BR';
                 document.getElementById('settings-country').value = settings.country || '';
@@ -4839,13 +4828,13 @@ ${outputArea.value}
                 document.getElementById('settings-city').value = settings.city || '';
                 document.getElementById('settings-corpus-url').value = settings.corpusUrl || '';
                 document.getElementById('settings-serverless-endpoint').value = settings.serverlessEndpoint || '';
-                
+
                 return settings;
             }
         } catch (error) {
             console.error('Error loading settings:', error);
         }
-        
+
         return null;
     }
 
@@ -4860,7 +4849,7 @@ ${outputArea.value}
         const stateField = document.getElementById('state');
         const cityField = document.getElementById('city');
         const corpusField = document.getElementById('corpus-url');
-        
+
         if (languageField && !languageField.value && settings.language) {
             languageField.value = settings.language;
         }
@@ -4919,16 +4908,16 @@ ${outputArea.value}
         if (!formField) return;
 
         const value = field.value.trim();
-        
+
         // Clear previous states
         formField.classList.remove('error', 'success');
-        
+
         // Don't validate empty field in real-time
         if (!value) return;
-        
+
         let isValid = true;
         let errorMessage = '';
-        
+
         // Check if URL starts with https://
         if (!value.startsWith('https://')) {
             isValid = false;
@@ -4950,7 +4939,7 @@ ${outputArea.value}
                 errorMessage = 'Formato de URL inválido';
             }
         }
-        
+
         // Apply validation state immediately
         if (!isValid) {
             formField.classList.add('error');
@@ -4975,7 +4964,7 @@ ${outputArea.value}
             3. Insira a URL completa começando com https://<br>
             4. Teste a configuração enviando um extrato
         `;
-        
+
         this.showToastWithAction(
             guidanceMessage,
             'info',
@@ -4991,7 +4980,7 @@ ${outputArea.value}
     initSettingsFormValidation() {
         const formFields = [
             'settings-language',
-            'settings-country', 
+            'settings-country',
             'settings-state',
             'settings-city',
             'settings-corpus-url',
@@ -5007,7 +4996,7 @@ ${outputArea.value}
                         this.validateServerlessEndpointRealTime(field);
                     });
                 }
-                
+
                 // Validate on blur (when user leaves the field)
                 field.addEventListener('blur', () => {
                     this.validateSingleField(fieldId);
@@ -5118,10 +5107,10 @@ ${outputArea.value}
     showAdvancedToastDemo() {
         // Loading toast
         const loadingId = this.toastSystem.loading('Processando dados...');
-        
+
         setTimeout(() => {
             this.toastSystem.hide(loadingId);
-            
+
             // Toast with title and actions
             this.toastSystem.withActions(
                 'Deseja salvar as alterações?',
@@ -5166,7 +5155,7 @@ ${outputArea.value}
         // Validate form first
         const fields = ['edit-title', 'edit-content'];
         let isValid = true;
-        
+
         fields.forEach(fieldId => {
             if (!this.validateEditorField(fieldId)) {
                 isValid = false;
@@ -5191,7 +5180,7 @@ ${outputArea.value}
 
             // Generate markdown using md-builder utility
             const { buildMarkdown } = await import('../util/md-builder.js');
-            
+
             const markdownData = {
                 title: formData.title,
                 jurisdiction: formData.jurisdiction,
@@ -5202,7 +5191,7 @@ ${outputArea.value}
             };
 
             const markdown = buildMarkdown(markdownData);
-            
+
             // Show markdown preview modal
             this.showMarkdownPreview(markdown, formData);
 
@@ -5279,7 +5268,7 @@ ${outputArea.value}
             this.showToast('Markdown copiado para a área de transferência!', 'success');
         } catch (error) {
             console.error('Error copying to clipboard:', error);
-            
+
             // Fallback: create temporary textarea
             const textarea = document.createElement('textarea');
             textarea.value = this.currentMarkdown;
@@ -5287,7 +5276,7 @@ ${outputArea.value}
             textarea.select();
             document.execCommand('copy');
             document.body.removeChild(textarea);
-            
+
             this.showToast('Markdown copiado para a área de transferência!', 'success');
         }
     }
@@ -5304,16 +5293,16 @@ ${outputArea.value}
         try {
             const blob = new Blob([this.currentMarkdown], { type: 'text/markdown' });
             const url = URL.createObjectURL(blob);
-            
+
             const a = document.createElement('a');
             a.href = url;
             a.download = this.currentMarkdownFilename || 'documento.md';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            
+
             URL.revokeObjectURL(url);
-            
+
             this.showToast('Arquivo markdown baixado!', 'success');
         } catch (error) {
             console.error('Error downloading markdown:', error);
@@ -5398,9 +5387,9 @@ ${outputArea.value}
                 }
             }
         `;
-        
+
         document.head.appendChild(style);
-    } 
+    }
 
 
     /**
@@ -5414,7 +5403,7 @@ ${outputArea.value}
             if (settings && settings.serverlessEndpoint) {
                 return settings.serverlessEndpoint;
             }
-            
+
             // Fallback to direct setting lookup
             try {
                 return await getSetting('serverlessEndpoint');
@@ -5442,7 +5431,7 @@ ${outputArea.value}
 
 
 
-    
+
     /**
      * Handle global keyboard shortcuts and navigation
      * @param {KeyboardEvent} e - Keyboard event
@@ -5452,7 +5441,7 @@ ${outputArea.value}
         if (e.target.matches('input, textarea, select, [contenteditable]')) {
             return;
         }
-        
+
         // Handle keyboard shortcuts
         if (e.ctrlKey || e.metaKey) {
             switch (e.key) {
@@ -5474,7 +5463,7 @@ ${outputArea.value}
                     break;
             }
         }
-        
+
         // Handle escape key
         if (e.key === 'Escape') {
             // Close any open modals
@@ -5484,29 +5473,29 @@ ${outputArea.value}
                 this.hideModal(modalName);
                 return;
             }
-            
+
             // Navigate to home if not already there
             if (this.currentView !== 'home') {
                 this.navigate('home');
             }
         }
-        
+
         // Handle arrow keys for workspace steps
         if (this.currentView === 'workspace') {
             if (e.key === 'ArrowLeft' && this.currentStep > 1) {
                 e.preventDefault();
                 this.goToWorkspaceStep(this.currentStep - 1);
-            } else if (e.key === 'ArrowRight' && this.currentStep < 3) {
+            } else if (e.key === 'ArrowRight' && this.currentStep < 2) {
                 e.preventDefault();
                 this.goToWorkspaceStep(this.currentStep + 1);
             }
         }
-        
+
         // Handle tab navigation with Alt key
         if (e.altKey) {
             const views = ['home', 'workspace', 'collector'];
             const currentIndex = views.indexOf(this.currentView);
-            
+
             if (e.key === 'ArrowLeft' && currentIndex > 0) {
                 e.preventDefault();
                 this.navigate(views[currentIndex - 1]);
@@ -5516,7 +5505,7 @@ ${outputArea.value}
             }
         }
     }
-    
+
     /**
      * Initialize workspace step completion tracking
      */
@@ -5524,12 +5513,11 @@ ${outputArea.value}
         if (!this.workspaceStepCompleted) {
             this.workspaceStepCompleted = {
                 1: false,
-                2: false,
-                3: false
+                2: false
             };
         }
     }
-    
+
     /**
      * Enhanced form validation with accessibility
      * @param {HTMLFormElement} form - Form to validate
@@ -5538,27 +5526,27 @@ ${outputArea.value}
     validateFormWithAccessibility(form) {
         let isValid = true;
         const firstErrorField = null;
-        
+
         // Clear previous validation states
         form.querySelectorAll('.form-field').forEach(field => {
             field.classList.remove('error', 'success');
         });
-        
+
         // Validate required fields
         form.querySelectorAll('[required]').forEach(field => {
             if (typeof field.closest !== 'function') return;
             const formField = field.closest('.form-field');
             const errorMessage = formField?.querySelector('.error-message');
-            
+
             if (!field.value.trim()) {
                 isValid = false;
                 formField?.classList.add('error');
                 field.setAttribute('aria-invalid', 'true');
-                
+
                 if (errorMessage) {
                     errorMessage.textContent = `${field.labels[0]?.textContent || 'Campo'} é obrigatório`;
                 }
-                
+
                 if (!firstErrorField) {
                     firstErrorField = field;
                 }
@@ -5567,28 +5555,28 @@ ${outputArea.value}
                 field.setAttribute('aria-invalid', 'false');
             }
         });
-        
+
         // Validate URL fields
         form.querySelectorAll('input[type="url"]').forEach(field => {
             if (typeof field.closest !== 'function') return;
             const formField = field.closest('.form-field');
             const errorMessage = formField?.querySelector('.error-message');
-            
+
             if (field.value && !this.isValidUrl(field.value)) {
                 isValid = false;
                 formField?.classList.add('error');
                 field.setAttribute('aria-invalid', 'true');
-                
+
                 if (errorMessage) {
                     errorMessage.textContent = 'URL inválida';
                 }
-                
+
                 if (!firstErrorField) {
                     firstErrorField = field;
                 }
             }
         });
-        
+
         // Focus first error field and announce errors
         if (!isValid && firstErrorField) {
             firstErrorField.focus();
@@ -5596,10 +5584,10 @@ ${outputArea.value}
         } else if (isValid) {
             this.announceToScreenReader('Formulário válido');
         }
-        
+
         return isValid;
     }
-    
+
     /**
      * Validate URL format
      * @param {string} url - URL to validate
@@ -5613,7 +5601,7 @@ ${outputArea.value}
             return false;
         }
     }
-    
+
     /**
      * Add real-time validation to form fields
      * @param {HTMLElement} container - Container with form fields
@@ -5624,7 +5612,7 @@ ${outputArea.value}
             field.addEventListener('blur', () => {
                 this.validateSingleField(field);
             });
-            
+
             // Clear error state on input
             field.addEventListener('input', () => {
                 if (typeof field.closest === 'function') {
@@ -5637,31 +5625,31 @@ ${outputArea.value}
             });
         });
     }
-    
+
     /**
      * Validate single form field
      * @param {HTMLElement} field - Field to validate
      */
     validateSingleField(field) {
         if (!field || typeof field.closest !== 'function') return true;
-        
+
         const formField = field.closest('.form-field');
         const errorMessage = formField?.querySelector('.error-message');
         let isValid = true;
         let message = '';
-        
+
         // Required field validation
         if (field.hasAttribute('required') && !field.value.trim()) {
             isValid = false;
             message = `${field.labels[0]?.textContent || 'Campo'} é obrigatório`;
         }
-        
+
         // URL validation
         if (field.type === 'url' && field.value && !this.isValidUrl(field.value)) {
             isValid = false;
             message = 'URL inválida';
         }
-        
+
         // Update field state
         if (isValid) {
             formField?.classList.remove('error');
@@ -5671,15 +5659,15 @@ ${outputArea.value}
             formField?.classList.remove('success');
             formField?.classList.add('error');
             field.setAttribute('aria-invalid', 'true');
-            
+
             if (errorMessage) {
                 errorMessage.textContent = message;
             }
         }
-        
+
         return isValid;
     }
-    
+
     /**
      * Mark workspace step as completed
      * @param {number} step - Step number to mark as completed
@@ -5688,14 +5676,14 @@ ${outputArea.value}
         this.initWorkspaceStepTracking();
         this.workspaceStepCompleted[step] = true;
         this.updateNavigationBadges();
-        
+
         // Update step visual state
         const stepElement = document.querySelector(`.step[data-step="${step}"]`);
         if (stepElement) {
             stepElement.classList.add('completed');
         }
     }
-    
+
 
 }
 
