@@ -1,0 +1,113 @@
+:root {
+  --bg: #ffffff;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --card: #f8fafc;
+  --accent: #2563eb;
+}
+
+* { box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  padding: 12px;
+  width: 560px;
+}
+
+h2, h3 { margin: 10px 0 6px; }
+label { font-size: 12px; color: var(--muted); }
+
+select, input[type="text"], textarea, button {
+  width: 100%;
+  margin: 6px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+textarea { min-height: 120px; resize: vertical; }
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+#articles {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--card);
+}
+
+.article {
+  cursor: pointer;
+  padding: 8px;
+  border-bottom: 1px dashed var(--line);
+}
+.article:last-child { border-bottom: 0; }
+.article:hover { background: #eef2ff; }
+
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.badge {
+  background: #eef2ff;
+  color: #1e293b;
+  border: 1px solid #c7d2fe;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.preset-btn {
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.preset-btn:hover { background: #f1f5f9; }
+
+#output {
+  white-space: pre-wrap;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--card);
+}
+
+#history {
+  list-style: none; padding: 0; margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  max-height: 200px; overflow-y: auto;
+}
+.hist-item {
+  border-bottom: 1px solid var(--line);
+  padding: 8px;
+}
+.hist-item:last-child { border-bottom: 0; }
+.hist-title { font-weight: 600; font-size: 13px; }
+.hist-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.hist-body { display: none; margin-top: 6px; font-size: 13px; }
+.hist-item.open .hist-body { display: block; }
+
+.actions { display: flex; gap: 8px; }
+button.primary {
+  background: var(--accent); color: #fff; border: none;
+}
+button.ghost {
+  background: #fff;
+}
+.status { color: var(--muted); font-size: 12px; margin: 4px 0; }
+.engine-badge {
+  display:inline-block; font-size: 12px; background:#eef; padding:2px 8px;
+  border-radius: 999px; margin-left:6px; border:1px solid #c7d2fe;
+}
