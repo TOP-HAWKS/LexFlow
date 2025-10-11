@@ -116,38 +116,78 @@ if (useRealApiEl) {
 }
 
 // Listen to AI download progress events (dispatched by ai.js progressLogger)
+let downloadInProgress = false;
+
 window.addEventListener('ai-download-progress', (e) => {
   const pct = e.detail?.percent;
-  if (aiStatusEl) aiStatusEl.textContent = `Baixando modelo: ${pct ?? '?'}%`;
-  if (engineBadge) engineBadge.textContent = `${pct ?? '…'}%`;
+  const source = e.detail?.source || 'AI';
   
-  addLogEntry(`Progresso do download: ${pct ?? '?'}%`);
+  if (!downloadInProgress) {
+    downloadInProgress = true;
+    addLogEntry(`Iniciando download do modelo ${source}`);
+  }
+  
+  if (aiStatusEl) {
+    aiStatusEl.textContent = `Baixando ${source}: ${pct ?? '?'}%`;
+  }
+  
+  if (engineBadge) {
+    engineBadge.textContent = `${pct ?? '…'}%`;
+  }
+  
+  addLogEntry(`Progresso do download ${source}: ${pct ?? '?'}%`);
   
   const wrap = document.getElementById('aiProgressWrap');
   const bar = document.getElementById('aiProgressBar');
+  
   if (wrap && bar) {
     wrap.style.display = 'block';
+    wrap.classList.remove('error', 'done');
     bar.style.width = `${pct ?? 0}%`;
+    
+    if (!bar.classList.contains('indeterminate') && pct === null) {
+      bar.classList.add('indeterminate');
+    } else if (bar.classList.contains('indeterminate') && pct !== null) {
+      bar.classList.remove('indeterminate');
+    }
   }
 });
 
-window.addEventListener('ai-download-complete', () => {
-  if (aiStatusEl) aiStatusEl.textContent = 'Download concluído';
-  if (engineBadge) engineBadge.textContent = '✓';
+window.addEventListener('ai-download-complete', (e) => {
+  const source = e.detail?.source || 'AI';
+  downloadInProgress = false;
   
-  addLogEntry('Download do modelo concluído com sucesso');
+  if (aiStatusEl) {
+    aiStatusEl.textContent = `${source} carregado com sucesso`;
+  }
   
-  // refresh availability
-  checkAiAvailability();
+  if (engineBadge) {
+    engineBadge.textContent = '✓';
+  }
+  
+  addLogEntry(`Download do modelo ${source} concluído com sucesso`);
+  
   const wrap = document.getElementById('aiProgressWrap');
   const bar = document.getElementById('aiProgressBar');
+  
   if (wrap && bar) {
     wrap.classList.add('done');
     bar.classList.remove('indeterminate');
+    bar.style.width = '100%';
+    
     setTimeout(() => {
-      wrap.style.display = 'none';
-      wrap.classList.remove('done');
-      bar.style.width = '0%';
+      if (!downloadInProgress) {
+        wrap.style.display = 'none';
+        wrap.classList.remove('done');
+        bar.style.width = '0%';
+        
+        // Atualizar disponibilidade após um download bem-sucedido
+        checkAiAvailability().then(() => {
+          addLogEntry('Verificação de disponibilidade atualizada');
+        }).catch(err => {
+          addLogEntry('Erro ao verificar disponibilidade', 'error');
+        });
+      }
     }, 2000);
   }
 });

@@ -15,40 +15,73 @@ const _localMock = window._localMock || {
 };
 
 function progressLogger(prefix) {
+  let lastProgress = 0;
+  let isCompleted = false;
+
   return (m) => {
     console.debug(`[progressLogger] Registrando monitor para ${prefix}`, m);
+    
     m.addEventListener('downloadprogress', (e) => {
-      // e may contain loaded and total or a fractional value; normalize to percent
+      if (isCompleted) return; // Evita eventos de progresso após completar
+      
       let pct = null;
       try {
         if (typeof e.loaded === 'number' && typeof e.total === 'number' && e.total > 0) {
           pct = Math.round((e.loaded / e.total) * 100);
         } else if (typeof e.loaded === 'number') {
-          // some implementations provide a fraction 0..1
           pct = Math.round(e.loaded * 100);
         }
       } catch (err) {
+        console.warn(`[progressLogger] Erro ao calcular progresso:`, err);
         pct = null;
       }
-      console.log(`${prefix} download: ${pct ?? '?'}%`, e);
-      // dispatch UI event so popup can show progress
+
+      // Evita atualizações desnecessárias
+      if (pct === lastProgress) return;
+      lastProgress = pct;
+
+      console.debug(`[${prefix}] Download progresso: ${pct ?? '?'}%`);
+      
       try {
-        window.dispatchEvent(new CustomEvent('ai-download-progress', { detail: { prefix, percent: pct } }));
+        window.dispatchEvent(new CustomEvent('ai-download-progress', { 
+          detail: { 
+            source: prefix, 
+            percent: pct,
+            loaded: e.loaded,
+            total: e.total
+          }
+        }));
       } catch (ex) {
-        /* ignore */
+        console.error(`[progressLogger] Erro ao disparar evento de progresso:`, ex);
       }
     });
+
     m.addEventListener('downloadcomplete', () => {
-      console.log(`${prefix} download: completo!`);
+      if (isCompleted) return;
+      isCompleted = true;
+      
+      console.debug(`[${prefix}] Download completo`);
       try {
-        window.dispatchEvent(new CustomEvent('ai-download-complete', { detail: { prefix } }));
-      } catch (ex) {}
+        window.dispatchEvent(new CustomEvent('ai-download-complete', { 
+          detail: { source: prefix }
+        }));
+      } catch (ex) {
+        console.error(`[progressLogger] Erro ao disparar evento de conclusão:`, ex);
+      }
     });
+
     m.addEventListener('error', (err) => {
-      console.error(`${prefix} erro no download:`, err);
+      console.error(`[${prefix}] Erro no download:`, err);
       try {
-        window.dispatchEvent(new CustomEvent('ai-download-error', { detail: { prefix, error: String(err) } }));
-      } catch (ex) {}
+        window.dispatchEvent(new CustomEvent('ai-download-error', { 
+          detail: { 
+            source: prefix, 
+            error: err?.message || String(err)
+          }
+        }));
+      } catch (ex) {
+        console.error(`[progressLogger] Erro ao disparar evento de erro:`, ex);
+      }
     });
   };
 }
@@ -122,16 +155,25 @@ async function runPrompt(systemInstruction, userText = "", outputLang = "en", fo
         console.debug('[runPrompt] Forçando uso real apesar de availability=', availability);
         const systemWithLang = `${systemInstruction}\nRespond in the following language: ${outputLang}.`;
           // helper: create with timeout to avoid indefinite hangs
-          const createWithTimeout = async (opts, ms = 30000) => {
+          const createWithTimeout = async (opts, ms = 60000) => {
+            console.debug('[createWithTimeout] Iniciando criação do modelo com timeout de', ms, 'ms');
             const p = LanguageModel.create(opts);
             let timer = null;
-            const timeout = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('create-timeout')), ms); });
+            const timeout = new Promise((_, rej) => { 
+              timer = setTimeout(() => {
+                console.warn('[createWithTimeout] Timeout atingido após', ms, 'ms');
+                rej(new Error('Timeout ao criar o modelo. Por favor, tente novamente.'));
+              }, ms);
+            });
+            
             try {
               const res = await Promise.race([p, timeout]);
+              console.debug('[createWithTimeout] Modelo criado com sucesso');
               clearTimeout(timer);
               return res;
             } catch (err) {
-              // if p resolves later, ignore; just ensure create() doesn't hang forever
+              console.error('[createWithTimeout] Erro ao criar modelo:', err);
+              clearTimeout(timer);
               throw err;
             }
           };
