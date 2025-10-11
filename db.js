@@ -16,7 +16,10 @@ function openDB() {
       }
     };
     req.onsuccess = (e) => resolve(e.target.result);
-    req.onerror = (e) => reject(e);
+    req.onerror = (e) => {
+      console.error('IndexedDB open error:', e);
+      reject(e);
+    };
   });
 }
 
@@ -26,7 +29,8 @@ async function saveHistory(item) {
   const store = tx.objectStore(STORE_HISTORY);
   item.id = crypto.randomUUID();
   item.data = new Date().toISOString();
-  store.add(item);
+  // use put to avoid errors if an item with the same key somehow exists
+  store.put(item);
   return new Promise((resolve) => tx.oncomplete = () => resolve(true));
 }
 

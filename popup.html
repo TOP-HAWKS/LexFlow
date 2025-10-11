@@ -7,55 +7,114 @@
 </head>
 <body>
   <h2>⚖️ LexFlow AI</h2>
+  
+  <div class="layout">
+    <div class="card">
+      <h3>📚 Seleção de Lei</h3>
+      <label for="lawSelect">Escolha a lei ou código para análise</label>
+      <select id="lawSelect" aria-label="Selecione a lei ou código para análise">
+        <option value="">-- selecione --</option>
+      </select>
+      <div id="articles" class="articles" role="listbox" aria-label="Lista de artigos disponíveis"></div>
+    </div>
 
-  <!-- Seleção de Lei -->
-  <label for="lawSelect">📚 Escolha a lei/código:</label>
-  <select id="lawSelect">
-    <option value="">-- selecione --</option>
-  </select>
+    <main>
+      <div class="card">
+        <h3>📝 Contexto selecionado</h3>
+        <textarea 
+          id="inputText" 
+          rows="8" 
+          placeholder="Selecione artigos ou cole texto aqui..."
+          aria-label="Área de texto para o contexto selecionado">
+        </textarea>
+      </div>
 
-  <!-- Lista de artigos -->
-  <div id="articles"></div>
+      <div class="card">
+        <h3>🎯 Configuração da Análise</h3>
+        <div class="row">
+          <div>
+            <label for="presetSelect">Tipo de análise</label>
+            <select id="presetSelect" aria-label="Selecione o tipo de análise">
+              <option value="resumo">Resumir em 3 parágrafos</option>
+              <option value="revisao">Revisão de clareza e legibilidade</option>
+              <option value="checklist">Checklist de riscos e inconsistências</option>
+              <option value="clausulas">Redação de cláusulas de contrato de aluguel</option>
+            </select>
+          </div>
+          <div>
+            <label for="lmLang">Idioma de saída</label>
+            <select id="lmLang" aria-label="Selecione o idioma de saída">
+              <option value="pt" selected>🇧🇷 Português</option>
+              <option value="en">🇺🇸 Inglês</option>
+              <option value="es">🇪🇸 Espanhol</option>
+              <option value="ja">🇯🇵 Japonês</option>
+            </select>
+          </div>
+          <div>
+            <label for="customPrompt">Instruções adicionais (opcional)</label>
+            <textarea 
+              id="customPrompt" 
+              rows="2" 
+              placeholder="Instruções específicas para a análise..."
+              aria-label="Campo para prompt personalizado">
+            </textarea>
+          </div>
+        </div>
+      </div>
 
-  <!-- Painel de contexto -->
-  <h3>📝 Contexto selecionado</h3>
-  <textarea id="inputText" rows="8" placeholder="Selecione artigos ou cole texto aqui..."></textarea>
+      <div id="progressContainer" class="card" style="display: none;">
+        <h4>Progresso</h4>
+        <div class="progress-bar">
+          <div class="fill" style="width: 0%"></div>
+        </div>
+        <div id="progressText" class="small text-muted"></div>
+      </div>
 
-  <!-- Presets -->
-  <h3>🎯 Tipo de análise</h3>
-  <select id="presetSelect">
-    <option value="resumo">Resumir em 3 parágrafos</option>
-    <option value="revisao">Revisão de clareza e legibilidade</option>
-    <option value="checklist">Checklist de riscos e inconsistências</option>
-    <option value="clausulas">Redação de cláusulas de contrato de aluguel</option>
-  </select>
-  <br/>
-  <label for="customPrompt">Prompt personalizado:</label>
-  <textarea id="customPrompt" rows="3"></textarea>
+      <div id="processingIndicator" class="processing-indicator" style="display: none;">
+        <div class="loading-spinner"></div>
+        <span>Processando sua solicitação...</span>
+      </div>
 
-  <!-- Idioma -->
-  <label for="lmLang">🌐 Idioma de saída:</label>
-  <select id="lmLang">
-    <option value="en">Inglês</option>
-    <option value="es">Espanhol</option>
-    <option value="ja">Japonês</option>
-  </select>
+      <div id="logContainer" class="log-container" style="display: none;">
+        <div id="logEntries"></div>
+      </div>
 
-  <!-- Botões -->
-  <div class="actions">
-    <button id="processMR">⚡ Análise Inteligente</button>
-    <button id="copyOut">📋 Copiar resultado</button>
-    <button id="exportMd">💾 Exportar .md</button>
+      <div id="outputContainer" class="card">
+        <h4>Resultado da análise</h4>
+        <div id="output" role="region" aria-label="Resultado da análise"></div>
+      </div>
+
+      <div class="card">
+        <div class="actions-row">
+          <div class="action-group">
+            <button id="processMR" class="primary" aria-label="Iniciar análise">⚡ Analisar</button>
+            <button id="copyOut" class="ghost" aria-label="Copiar resultado">📋 Copiar</button>
+            <button id="exportMd" class="ghost" aria-label="Exportar como Markdown">💾 Exportar .md</button>
+          </div>
+          <div class="api-status">
+            <label class="api-toggle">
+              <input type="checkbox" id="useRealApi" aria-label="Usar API real"> 
+              <span>Usar API real</span>
+            </label>
+            <span id="aiStatus" class="status" role="status"></span>
+            <span id="engineBadge" class="engine-badge"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>📜 Histórico</h3>
+        <ul id="history" role="list" aria-label="Histórico de análises"></ul>
+      </div>
+
+      <div id="aiProgressWrap" class="ai-progress-wrap" aria-hidden="true">
+        <div id="aiProgressBar" class="ai-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+      </div>
+
+      <div id="status" class="status"></div>
+      <pre id="output"></pre>
+    </main>
   </div>
-
-  <!-- Status + resultado -->
-  <div id="status"></div>
-  <pre id="output"></pre>
-  <span id="engineBadge"></span>
-
-  <!-- Histórico -->
-  <h3>📜 Histórico</h3>
-  <ul id="history"></ul>
 
   <script src="db.js"></script>
   <script src="ai.js"></script>
