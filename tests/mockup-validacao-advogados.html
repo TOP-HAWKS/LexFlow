@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LexFlow - Assistente Jurídico com IA</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .main-nav {
+            background: #34495e;
+            padding: 0 2rem;
+            display: flex;
+            gap: 0;
+        }
+
+        .nav-tab {
+            padding: 1rem 1.5rem;
+            background: none;
+            border: none;
+            color: #bdc3c7;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+
+        .nav-tab:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .nav-tab.active {
+            color: white;
+            border-bottom-color: #3498db;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .content {
+            padding: 2rem;
+        }
+
+        .view {
+            display: none;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        .welcome-section {
+            text-align: center;
+            padding: 3rem 0;
+        }
+
+        .welcome-title {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: #2c3e50;
+        }
+
+        .welcome-subtitle {
+            font-size: 1.2rem;
+            color: #7f8c8d;
+            margin-bottom: 3rem;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .feature-card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+            border-color: #3498db;
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+        }
+
+        .feature-description {
+            color: #7f8c8d;
+            line-height: 1.6;
+        }
+
+        .workspace-container {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+            height: calc(100vh - 200px);
+        }
+
+        .sidebar {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .main-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .jurisdiction-selector {
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .document-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 0.5rem;
+        }
+
+        .document-item {
+            padding: 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 0.5rem;
+            border: 1px solid #e9ecef;
+        }
+
+        .document-item:hover {
+            background: #f8f9fa;
+        }
+
+        .document-item.selected {
+            background: #e3f2fd;
+            border-color: #3498db;
+        }
+
+        .document-title {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .document-meta {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-top: 0.25rem;
+        }
+
+        .articles-container {
+            margin-top: 1rem;
+        }
+
+        .article-item {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .article-item:hover {
+            border-color: #3498db;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .article-item.selected {
+            border-color: #27ae60;
+            background: #f8fff8;
+        }
+
+        .article-number {
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 0.5rem;
+        }
+
+        .article-content {
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+
+        .selected-context {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .context-item {
+            background: white;
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border-left: 4px solid #27ae60;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .context-content {
+            flex: 1;
+        }
+
+        .context-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-left: 1rem;
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .icon-btn:hover {
+            background: #f8f9fa;
+        }
+
+        .icon-btn.delete:hover {
+            background: #fee;
+            color: #e74c3c;
+        }
+
+        .clear-all-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-bottom: 1rem;
+            transition: all 0.2s;
+        }
+
+        .clear-all-btn:hover {
+            background: #c0392b;
+        }
+
+        .result-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .feedback-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .feedback-btn {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 0.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1rem;
+        }
+
+        .feedback-btn:hover {
+            background: #e9ecef;
+        }
+
+        .feedback-btn.active.positive {
+            background: #d4edda;
+            border-color: #27ae60;
+            color: #27ae60;
+        }
+
+        .feedback-btn.active.negative {
+            background: #f8d7da;
+            border-color: #e74c3c;
+            color: #e74c3c;
+        }
+
+        .copy-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: #2980b9;
+        }
+
+        .copy-btn.copied {
+            background: #27ae60;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .prompt-studio {
+            margin-top: 2rem;
+        }
+
+        .preset-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .preset-btn {
+            padding: 0.5rem 1rem;
+            border: 2px solid #e9ecef;
+            background: white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+        }
+
+        .preset-btn:hover {
+            border-color: #3498db;
+            background: #f8f9fa;
+        }
+
+        .preset-btn.active {
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+
+        .ai-output {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            border-left: 4px solid #3498db;
+        }
+
+        .ai-thinking {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e9ecef;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .collector-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .queue-item {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid #e9ecef;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .queue-item:hover {
+            border-color: #3498db;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .queue-item.selected {
+            border-color: #27ae60;
+            background: #f8fff8;
+        }
+
+        .queue-title {
+            font-weight: 500;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+
+        .queue-meta {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-bottom: 0.5rem;
+        }
+
+        .queue-preview {
+            font-size: 0.9rem;
+            color: #555;
+            line-height: 1.4;
+            max-height: 60px;
+            overflow: hidden;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .status-queued {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-processed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .editor-panel {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+
+        .metadata-form {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #27ae60;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            transform: translateX(400px);
+            transition: transform 0.3s;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            margin-top: 0.5rem;
+        }
+
+        .history-item {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid #3498db;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .history-title {
+            font-weight: 500;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+
+        .history-meta {
+            font-size: 0.8rem;
+            color: #7f8c8d;
+            margin-bottom: 0.5rem;
+        }
+
+        .history-preview {
+            color: #555;
+            line-height: 1.4;
+        }
+
+        @media (max-width: 768px) {
+            .workspace-container {
+                grid-template-columns: 1fr;
+            }
+
+            .collector-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                ⚖️ LexFlow
+            </div>
+            <div class="user-info">
+                <span>👤 Dr. Maria Silva</span>
+                <span>|</span>
+                <span>📍 Porto Alegre, RS</span>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="main-nav">
+            <button class="nav-tab active" onclick="showView('home')">🏠 Início</button>
+            <button class="nav-tab" onclick="showView('workspace')">📚 Workspace Jurídico</button>
+            <button class="nav-tab" onclick="showView('collector')">📝 Coletor & Curadoria</button>
+            <button class="nav-tab" onclick="showView('history')">📊 Histórico & Analytics</button>
+        </nav>
+
+        <!-- Content -->
+        <main class="content">
+            <!-- Home View -->
+            <div id="home-view" class="view active">
+                <div class="welcome-section">
+                    <h1 class="welcome-title">Bem-vindo ao LexFlow</h1>
+                    <p class="welcome-subtitle">Seu assistente jurídico inteligente com IA integrada</p>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number">47</div>
+                            <div class="stat-label">Análises Realizadas</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">12</div>
+                            <div class="stat-label">Documentos Curados</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">3.2h</div>
+                            <div class="stat-label">Tempo Economizado</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="feature-grid">
+                    <div class="feature-card" onclick="showView('workspace')">
+                        <div class="feature-icon">🔍</div>
+                        <div class="feature-title">Pesquisa & Análise Legal</div>
+                        <div class="feature-description">
+                            Pesquise leis por jurisdição, selecione artigos relevantes e gere análises jurídicas
+                            personalizadas com IA. Ideal para pesquisa doutrinária e fundamentação de peças.
+                        </div>
+                    </div>
+
+                    <div class="feature-card" onclick="showView('collector')">
+                        <div class="feature-icon">📋</div>
+                        <div class="feature-title">Curadoria de Conteúdo</div>
+                        <div class="feature-description">
+                            Capture conteúdo jurídico da web, organize com metadados e gere documentos
+                            estruturados para sua base de conhecimento ou repositório público.
+                        </div>
+                    </div>
+
+                    <div class="feature-card" onclick="showView('history')">
+                        <div class="feature-icon">📈</div>
+                        <div class="feature-title">Analytics & Histórico</div>
+                        <div class="feature-description">
+                            Acompanhe suas análises, reutilize prompts eficazes e monitore sua
+                            produtividade jurídica com métricas detalhadas.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workspace View -->
+            <div id="workspace-view" class="view">
+                <div class="workspace-container">
+                    <!-- Sidebar -->
+                    <div class="sidebar">
+                        <div class="section-title">
+                            🌍 Configuração de Jurisdição
+                        </div>
+
+                        <div class="jurisdiction-selector">
+                            <div class="form-group">
+                                <label class="form-label">País</label>
+                                <select class="form-control" onchange="updateDocuments()">
+                                    <option value="br" selected>Brasil</option>
+                                    <option value="us">Estados Unidos</option>
+                                    <option value="es">Espanha</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Estado</label>
+                                <select class="form-control" onchange="updateDocuments()">
+                                    <option value="rs" selected>Rio Grande do Sul</option>
+                                    <option value="sp">São Paulo</option>
+                                    <option value="rj">Rio de Janeiro</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Cidade</label>
+                                <select class="form-control" onchange="updateDocuments()">
+                                    <option value="porto-alegre" selected>Porto Alegre</option>
+                                    <option value="canoas">Canoas</option>
+                                    <option value="caxias">Caxias do Sul</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="section-title">
+                            📚 Documentos Disponíveis
+                        </div>
+
+                        <div class="document-list" id="document-list">
+                            <div class="document-item" onclick="selectDocument(this, 'constituicao')">
+                                <div class="document-title">Constituição Federal 1988</div>
+                                <div class="document-meta">Federal • 245 artigos</div>
+                            </div>
+                            <div class="document-item" onclick="selectDocument(this, 'codigo-civil')">
+                                <div class="document-title">Código Civil</div>
+                                <div class="document-meta">Federal • 2.046 artigos</div>
+                            </div>
+                            <div class="document-item" onclick="selectDocument(this, 'cdc')">
+                                <div class="document-title">Código de Defesa do Consumidor</div>
+                                <div class="document-meta">Federal • 119 artigos</div>
+                            </div>
+                            <div class="document-item" onclick="selectDocument(this, 'lei-organica')">
+                                <div class="document-title">Lei Orgânica de Porto Alegre</div>
+                                <div class="document-meta">Municipal • 187 artigos</div>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label class="form-label">🔍 Buscar Artigos</label>
+                            <input type="text" class="form-control" placeholder="Ex: direito do consumidor"
+                                oninput="searchArticles(this.value)">
+                        </div>
+                    </div>
+
+                    <!-- Main Panel -->
+                    <div class="main-panel">
+                        <div class="section-title">
+                            📖 Artigos Selecionados
+                        </div>
+
+                        <div class="articles-container" id="articles-container">
+                            <p style="color: #7f8c8d; text-align: center; padding: 2rem;">
+                                Selecione um documento à esquerda para visualizar os artigos
+                            </p>
+                        </div>
+
+                        <div class="selected-context" id="selected-context" style="display: none;">
+                            <div class="section-title">
+                                ✅ Contexto Selecionado
+                                <button class="clear-all-btn" onclick="clearAllArticles()"
+                                    title="Limpar todos os artigos">
+                                    🗑️ Limpar Todos
+                                </button>
+                            </div>
+                            <div id="context-items"></div>
+                        </div>
+
+                        <div class="prompt-studio">
+                            <div class="section-title">
+                                🤖 Prompt Studio
+                            </div>
+
+                            <div class="preset-buttons">
+                                <button class="preset-btn active" onclick="selectPreset(this, 'resumo')">
+                                    📝 Resumo Executivo
+                                </button>
+                                <button class="preset-btn" onclick="selectPreset(this, 'analise')">
+                                    🔍 Análise Jurídica
+                                </button>
+                                <button class="preset-btn" onclick="selectPreset(this, 'comparacao')">
+                                    ⚖️ Comparação Legal
+                                </button>
+                                <button class="preset-btn" onclick="selectPreset(this, 'clausulas')">
+                                    📋 Geração de Cláusulas
+                                </button>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Prompt Personalizado</label>
+                                <textarea class="form-control" rows="3" id="custom-prompt"
+                                    placeholder="Descreva o que você gostaria que a IA analise...">Faça um resumo executivo dos artigos selecionados, destacando os principais direitos e obrigações, com linguagem acessível para apresentação ao cliente.</textarea>
+                            </div>
+
+                            <button class="btn btn-primary" onclick="executeAI()"
+                                style="width: 100%; margin-top: 1rem;">
+                                🚀 Executar Análise com IA
+                            </button>
+
+                            <div class="ai-output" id="ai-output" style="display: none;">
+                                <div class="ai-thinking" id="ai-thinking">
+                                    <div class="spinner"></div>
+                                    Analisando com IA...
+                                </div>
+                                <div id="ai-result" style="display: none;">
+                                    <div id="result-content"></div>
+                                    <div class="result-actions">
+                                        <div class="feedback-buttons">
+                                            <button class="feedback-btn" onclick="giveFeedback(this, 'positive')"
+                                                title="Resultado útil">
+                                                👍
+                                            </button>
+                                            <button class="feedback-btn" onclick="giveFeedback(this, 'negative')"
+                                                title="Resultado não útil">
+                                                👎
+                                            </button>
+                                        </div>
+                                        <button class="copy-btn" onclick="copyResult()" title="Copiar resultado">
+                                            📋 Copiar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Collector View -->
+            <div id="collector-view" class="view">
+                <div class="section-title">
+                    📝 Coletor & Curadoria de Conteúdo
+                </div>
+
+                <div class="collector-grid">
+                    <div>
+                        <div class="section-title">📥 Fila de Captura (4 itens)</div>
+
+                        <div class="queue-item selected" onclick="selectQueueItem(this, 0)">
+                            <div class="queue-title">STF decide sobre marco temporal</div>
+                            <div class="queue-meta">
+                                <span class="status-badge status-queued">Aguardando</span>
+                                • g1.globo.com • Hoje, 14:30
+                            </div>
+                            <div class="queue-preview">
+                                O Supremo Tribunal Federal (STF) decidiu por maioria que não existe marco temporal para
+                                demarcação de terras indígenas...
+                            </div>
+                        </div>
+
+                        <div class="queue-item" onclick="selectQueueItem(this, 1)">
+                            <div class="queue-title">Nova Lei de Proteção de Dados</div>
+                            <div class="queue-meta">
+                                <span class="status-badge status-processed">Processado</span>
+                                • conjur.com.br • Ontem, 16:45
+                            </div>
+                            <div class="queue-preview">
+                                Sancionada nova lei que altera dispositivos da LGPD, estabelecendo regras mais claras
+                                para tratamento de dados...
+                            </div>
+                        </div>
+
+                        <div class="queue-item" onclick="selectQueueItem(this, 2)">
+                            <div class="queue-title">Decisão TST sobre home office</div>
+                            <div class="queue-meta">
+                                <span class="status-badge status-queued">Aguardando</span>
+                                • tst.jus.br • 2 dias atrás
+                            </div>
+                            <div class="queue-preview">
+                                Tribunal Superior do Trabalho estabelece novos parâmetros para acordos de trabalho
+                                remoto...
+                            </div>
+                        </div>
+
+                        <div class="queue-item" onclick="selectQueueItem(this, 3)">
+                            <div class="queue-title">Resolução CNJ sobre IA no Judiciário</div>
+                            <div class="queue-meta">
+                                <span class="status-badge status-queued">Aguardando</span>
+                                • cnj.jus.br • 3 dias atrás
+                            </div>
+                            <div class="queue-preview">
+                                Conselho Nacional de Justiça publica resolução regulamentando uso de inteligência
+                                artificial...
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="editor-panel">
+                        <div class="section-title">✏️ Editor de Metadados</div>
+
+                        <div class="metadata-form">
+                            <div class="form-group">
+                                <label class="form-label">Título</label>
+                                <input type="text" class="form-control"
+                                    value="STF decide sobre marco temporal para terras indígenas">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Categoria</label>
+                                <select class="form-control">
+                                    <option>Direito Constitucional</option>
+                                    <option>Direito Administrativo</option>
+                                    <option>Direito Civil</option>
+                                    <option>Direito Trabalhista</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Tags</label>
+                                <input type="text" class="form-control"
+                                    value="STF, terras indígenas, marco temporal, direitos fundamentais">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Resumo Executivo</label>
+                                <textarea class="form-control"
+                                    rows="4">O STF decidiu por maioria (9x2) que não existe marco temporal para demarcação de terras indígenas. A decisão estabelece que a posse tradicional indígena independe de marco temporal específico, sendo reconhecida pela ocupação tradicional e pela relação espiritual com a terra.</textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Impacto Jurídico</label>
+                                <select class="form-control">
+                                    <option>Alto - Precedente vinculante</option>
+                                    <option>Médio - Orientação jurisprudencial</option>
+                                    <option>Baixo - Caso específico</option>
+                                </select>
+                            </div>
+
+                            <button class="btn btn-success" onclick="processItem()">
+                                ✅ Processar & Gerar Markdown
+                            </button>
+
+                            <button class="btn btn-secondary" onclick="generatePR()" style="margin-top: 0.5rem;">
+                                🔄 Criar Pull Request
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History View -->
+            <div id="history-view" class="view">
+                <div class="section-title">
+                    📊 Histórico & Analytics
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">47</div>
+                        <div class="stat-label">Análises com IA</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">12</div>
+                        <div class="stat-label">Documentos Curados</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">156</div>
+                        <div class="stat-label">Artigos Consultados</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">89%</div>
+                        <div class="stat-label">Precisão da IA</div>
+                    </div>
+                </div>
+
+                <div class="section-title" style="margin-top: 2rem;">
+                    🕒 Análises Recentes
+                </div>
+
+                <div class="history-item">
+                    <div class="history-title">Análise de Direitos do Consumidor - CDC Art. 6º ao 14º</div>
+                    <div class="history-meta">Hoje, 15:30 • Resumo Executivo • 3 artigos analisados</div>
+                    <div class="history-preview">
+                        A análise identificou os principais direitos básicos do consumidor, destacando a proteção contra
+                        práticas abusivas e o direito à informação clara. Recomenda-se atenção especial aos prazos de
+                        garantia e às condições de devolução...
+                    </div>
+                </div>
+
+                <div class="history-item">
+                    <div class="history-title">Comparação Legal - Constituição Art. 5º vs Lei Orgânica Municipal</div>
+                    <div class="history-meta">Ontem, 11:15 • Análise Comparativa • 5 artigos analisados</div>
+                    <div class="history-preview">
+                        Identificadas convergências entre os direitos fundamentais constitucionais e as garantias
+                        municipais. A Lei Orgânica de Porto Alegre amplia algumas proteções, especialmente em relação ao
+                        meio ambiente urbano...
+                    </div>
+                </div>
+
+                <div class="history-item">
+                    <div class="history-title">Geração de Cláusulas - Contrato de Locação Residencial</div>
+                    <div class="history-meta">2 dias atrás, 14:20 • Geração de Cláusulas • Lei do Inquilinato</div>
+                    <div class="history-preview">
+                        Geradas 12 cláusulas essenciais para contrato de locação residencial, incluindo reajuste anual,
+                        garantias aceitas e condições de rescisão antecipada, todas em conformidade com a Lei
+                        8.245/91...
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Dados mockados
+        const documentsData = {
+            'constituicao': [
+                {
+                    number: 'Art. 5º',
+                    content: 'Todos são iguais perante a lei, sem distinção de qualquer natureza, garantindo-se aos brasileiros e aos estrangeiros residentes no País a inviolabilidade do direito à vida, à liberdade, à igualdade, à segurança e à propriedade...'
+                },
+                {
+                    number: 'Art. 6º',
+                    content: 'São direitos sociais a educação, a saúde, a alimentação, o trabalho, a moradia, o transporte, o lazer, a segurança, a previdência social, a proteção à maternidade e à infância, a assistência aos desamparados...'
+                },
+                {
+                    number: 'Art. 170',
+                    content: 'A ordem econômica, fundada na valorização do trabalho humano e na livre iniciativa, tem por fim assegurar a todos existência digna, conforme os ditames da justiça social...'
+                }
+            ],
+            'codigo-civil': [
+                {
+                    number: 'Art. 1º',
+                    content: 'Toda pessoa é capaz de direitos e deveres na ordem civil.'
+                },
+                {
+                    number: 'Art. 186',
+                    content: 'Aquele que, por ação ou omissão voluntária, negligência ou imprudência, violar direito e causar dano a outrem, ainda que exclusivamente moral, comete ato ilícito.'
+                },
+                {
+                    number: 'Art. 927',
+                    content: 'Aquele que, por ato ilícito (arts. 186 e 187), causar dano a outrem, fica obrigado a repará-lo.'
+                }
+            ],
+            'cdc': [
+                {
+                    number: 'Art. 6º',
+                    content: 'São direitos básicos do consumidor: I - a proteção da vida, saúde e segurança contra os riscos provocados por práticas no fornecimento de produtos e serviços considerados perigosos ou nocivos...'
+                },
+                {
+                    number: 'Art. 14',
+                    content: 'O fornecedor de serviços responde, independentemente da existência de culpa, pela reparação dos danos causados aos consumidores por defeitos relativos à prestação dos serviços...'
+                },
+                {
+                    number: 'Art. 18',
+                    content: 'Os fornecedores de produtos de consumo duráveis ou não duráveis respondem solidariamente pelos vícios de qualidade ou quantidade que os tornem impróprios ou inadequados ao consumo...'
+                }
+            ]
+        };
+
+        let selectedArticles = [];
+        let currentDocument = null;
+
+        function showView(viewName) {
+            // Hide all views
+            document.querySelectorAll('.view').forEach(view => {
+                view.classList.remove('active');
+            });
+
+            // Show selected view
+            document.getElementById(viewName + '-view').classList.add('active');
+
+            // Update nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        function selectDocument(element, docId) {
+            // Update UI
+            document.querySelectorAll('.document-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            element.classList.add('selected');
+
+            currentDocument = docId;
+            displayArticles(docId);
+        }
+
+        function displayArticles(docId) {
+            const container = document.getElementById('articles-container');
+            const articles = documentsData[docId] || [];
+
+            container.innerHTML = articles.map(article => `
+                <div class="article-item" onclick="toggleArticle(this, '${docId}', '${article.number}')">
+                    <div class="article-number">${article.number}</div>
+                    <div class="article-content">${article.content}</div>
+                </div>
+            `).join('');
+        }
+
+        function toggleArticle(element, docId, articleNumber) {
+            element.classList.toggle('selected');
+
+            const article = documentsData[docId].find(a => a.number === articleNumber);
+            const articleId = `${docId}-${articleNumber}`;
+
+            if (element.classList.contains('selected')) {
+                selectedArticles.push({
+                    id: articleId,
+                    document: docId,
+                    number: articleNumber,
+                    content: article.content
+                });
+            } else {
+                selectedArticles = selectedArticles.filter(a => a.id !== articleId);
+            }
+
+            updateSelectedContext();
+        }
+
+        function updateSelectedContext() {
+            const contextContainer = document.getElementById('selected-context');
+            const itemsContainer = document.getElementById('context-items');
+
+            if (selectedArticles.length > 0) {
+                contextContainer.style.display = 'block';
+                itemsContainer.innerHTML = selectedArticles.map((article, index) => `
+                    <div class="context-item">
+                        <div class="context-content">
+                            <strong>${article.number}</strong><br>
+                            ${article.content.substring(0, 150)}...
+                        </div>
+                        <div class="context-actions">
+                            <button class="icon-btn delete" onclick="removeArticle('${article.id}')" title="Remover artigo">
+                                ❌
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                contextContainer.style.display = 'none';
+            }
+        }
+
+        function removeArticle(articleId) {
+            // Remove do array
+            selectedArticles = selectedArticles.filter(a => a.id !== articleId);
+
+            // Remove seleção visual do artigo
+            const articleElements = document.querySelectorAll('.article-item');
+            articleElements.forEach(element => {
+                const articleNumber = element.querySelector('.article-number').textContent;
+                const fullId = `${currentDocument}-${articleNumber}`;
+                if (fullId === articleId) {
+                    element.classList.remove('selected');
+                }
+            });
+
+            updateSelectedContext();
+            showToast('Artigo removido do contexto', 'success');
+        }
+
+        function clearAllArticles() {
+            selectedArticles = [];
+
+            // Remove todas as seleções visuais
+            document.querySelectorAll('.article-item.selected').forEach(element => {
+                element.classList.remove('selected');
+            });
+
+            updateSelectedContext();
+            showToast('Todos os artigos foram removidos', 'success');
+        }
+
+        function selectPreset(element, presetType) {
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            element.classList.add('active');
+
+            const prompts = {
+                'resumo': 'Faça um resumo executivo dos artigos selecionados, destacando os principais direitos e obrigações, com linguagem acessível para apresentação ao cliente.',
+                'analise': 'Realize uma análise jurídica detalhada dos artigos selecionados, identificando possíveis conflitos, lacunas e interpretações doutrinárias relevantes.',
+                'comparacao': 'Compare os artigos selecionados, identificando semelhanças, diferenças e possíveis hierarquias normativas entre eles.',
+                'clausulas': 'Com base nos artigos selecionados, gere cláusulas contratuais práticas que estejam em conformidade com a legislação apresentada.'
+            };
+
+            document.getElementById('custom-prompt').value = prompts[presetType];
+        }
+
+        function executeAI() {
+            if (selectedArticles.length === 0) {
+                showToast('Selecione pelo menos um artigo para análise', 'error');
+                return;
+            }
+
+            const outputContainer = document.getElementById('ai-output');
+            const thinkingDiv = document.getElementById('ai-thinking');
+            const resultDiv = document.getElementById('ai-result');
+
+            outputContainer.style.display = 'block';
+            thinkingDiv.style.display = 'flex';
+            resultDiv.style.display = 'none';
+
+            // Simular processamento da IA
+            setTimeout(() => {
+                thinkingDiv.style.display = 'none';
+                resultDiv.style.display = 'block';
+
+                const mockResult = `
+                    <h4>📋 Resumo Executivo - Análise Jurídica</h4>
+                    
+                    <p><strong>Artigos Analisados:</strong> ${selectedArticles.map(a => a.number).join(', ')}</p>
+                    
+                    <h5>🎯 Principais Pontos:</h5>
+                    <ul>
+                        <li><strong>Direitos Fundamentais:</strong> Os artigos estabelecem garantias constitucionais básicas, incluindo igualdade perante a lei e direitos sociais essenciais.</li>
+                        <li><strong>Responsabilidade Civil:</strong> Há clara definição de responsabilidade por atos ilícitos e obrigação de reparar danos causados.</li>
+                        <li><strong>Proteção ao Consumidor:</strong> Estabelece direitos básicos e responsabilidade objetiva dos fornecedores.</li>
+                    </ul>
+                    
+                    <h5>⚖️ Implicações Práticas:</h5>
+                    <p>A análise revela um sistema jurídico coerente que prioriza a proteção da dignidade humana e estabelece mecanismos claros de responsabilização. Para aplicação prática, recomenda-se:</p>
+                    <ul>
+                        <li>Verificar jurisprudência recente sobre interpretação dos dispositivos</li>
+                        <li>Considerar princípios constitucionais na aplicação das normas</li>
+                        <li>Atentar para prazos e procedimentos específicos</li>
+                    </ul>
+                    
+                    <h5>🔍 Recomendações:</h5>
+                    <p>Para casos concretos, sugere-se análise complementar da doutrina especializada e precedentes dos tribunais superiores.</p>
+                `;
+
+                document.getElementById('result-content').innerHTML = mockResult;
+                showToast('Análise concluída com sucesso!', 'success');
+            }, 3000);
+        }
+
+        function selectQueueItem(element, index) {
+            document.querySelectorAll('.queue-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            element.classList.add('selected');
+        }
+
+        function processItem() {
+            showToast('Item processado e Markdown gerado!', 'success');
+
+            // Simular mudança de status
+            setTimeout(() => {
+                const selectedItem = document.querySelector('.queue-item.selected .status-badge');
+                if (selectedItem) {
+                    selectedItem.textContent = 'Processado';
+                    selectedItem.className = 'status-badge status-processed';
+                }
+            }, 1000);
+        }
+
+        function generatePR() {
+            showToast('Pull Request criado no repositório público!', 'success');
+        }
+
+        function searchArticles(term) {
+            if (!currentDocument || !term) return;
+
+            const articles = documentsData[currentDocument];
+            const filtered = articles.filter(article =>
+                article.content.toLowerCase().includes(term.toLowerCase()) ||
+                article.number.toLowerCase().includes(term.toLowerCase())
+            );
+
+            const container = document.getElementById('articles-container');
+            container.innerHTML = filtered.map(article => `
+                <div class="article-item" onclick="toggleArticle(this, '${currentDocument}', '${article.number}')">
+                    <div class="article-number">${article.number}</div>
+                    <div class="article-content">${article.content}</div>
+                </div>
+            `).join('');
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+
+            if (type === 'error') {
+                toast.style.background = '#e74c3c';
+            }
+
+            document.body.appendChild(toast);
+
+            setTimeout(() => toast.classList.add('show'), 100);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => document.body.removeChild(toast), 300);
+            }, 3000);
+        }
+
+        function giveFeedback(button, type) {
+            // Remove feedback anterior
+            document.querySelectorAll('.feedback-btn').forEach(btn => {
+                btn.classList.remove('active', 'positive', 'negative');
+            });
+
+            // Adiciona feedback atual
+            button.classList.add('active', type);
+
+            const message = type === 'positive' ? 'Obrigado pelo feedback positivo!' : 'Feedback registrado. Vamos melhorar!';
+            showToast(message, 'success');
+        }
+
+        function copyResult() {
+            const resultContent = document.getElementById('result-content').innerText;
+
+            navigator.clipboard.writeText(resultContent).then(() => {
+                const copyBtn = document.querySelector('.copy-btn');
+                const originalText = copyBtn.innerHTML;
+
+                copyBtn.innerHTML = '✅ Copiado!';
+                copyBtn.classList.add('copied');
+
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalText;
+                    copyBtn.classList.remove('copied');
+                }, 2000);
+
+                showToast('Resultado copiado para a área de transferência!', 'success');
+            }).catch(() => {
+                showToast('Erro ao copiar. Tente selecionar o texto manualmente.', 'error');
+            });
+        }
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function () {
+            // Simular dados carregados
+            console.log('LexFlow Mockup carregado - Pronto para validação com advogados');
+        });
+    </script>
+</body>
+
+</html>
