@@ -1,18 +1,37 @@
 {
-  "name": "lexflow-spa-refactor",
+  "name": "lexflow-web-app",
   "version": "1.0.0",
-  "description": "LexFlow Chrome Extension SPA Refactor",
+  "description": "LexFlow — Legal AI Assistant with Chrome Built-in AI (Gemini Nano)",
   "type": "module",
+  "main": "index.html",
   "scripts": {
+    "dev": "python -m http.server 8080",
+    "serve": "python -m http.server 8080",
     "test": "vitest --run",
     "test:watch": "vitest",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "build": "echo 'No build step required for static web app'",
+    "start": "python -m http.server 8080"
   },
+  "keywords": [
+    "legal",
+    "ai",
+    "gemini-nano",
+    "chrome-ai",
+    "juridico",
+    "direito",
+    "advogado"
+  ],
+  "author": "LexFlow Team",
+  "license": "MIT",
   "devDependencies": {
     "vitest": "^1.0.0",
     "@vitest/ui": "^1.0.0",
     "jsdom": "^23.0.0",
     "@testing-library/dom": "^9.3.0",
     "@testing-library/user-event": "^14.5.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }

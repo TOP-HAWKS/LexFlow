@@ -1,15 +1,27 @@
 {
   "manifest_version": 3,
-  "name": "LexFlow — Legal Collector & AI",
-  "version": "0.2.0",
-  "description": "Review & summarize legal texts using Chrome built-in AI. Select jurisdiction, pick statutes (Markdown), craft prompts, get structured outputs. Capture snippets from the web into a curation queue and generate Markdown for a public repo.",
+  "name": "LexFlow — Legal AI Assistant",
+  "version": "1.0.0",
+  "description": "Legal AI Assistant with Chrome built-in AI for analyzing legal texts and capturing content",
   "action": {
-    "default_popup": "src/ui/app.html"
+    "default_title": "LexFlow - Legal AI Assistant",
+    "default_icon": {
+      "16": "assets/icon-16.png",
+      "48": "assets/icon-48.png",
+      "128": "assets/icon-128.png"
+    }
   },
   "background": {
-    "service_worker": "src/sw.js",
+    "service_worker": "src/js/service-worker.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/js/content-script.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "icons": {
     "16": "assets/icon-16.png",
     "48": "assets/icon-48.png",
@@ -18,36 +30,19 @@
   "permissions": [
     "storage",
     "contextMenus",
-    "scripting",
     "activeTab",
     "notifications"
   ],
   "host_permissions": [
-    "<all_urls>",
-    "https://api.github.com/*",
-    "https://raw.githubusercontent.com/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "src/content/cs.js"
-      ],
-      "run_at": "document_idle"
-    }
+    "<all_urls>"
   ],
   "web_accessible_resources": [
     {
-      "resources": [
-        "src/ui/*.html",
-        "src/ui/*.js",
-        "src/ui/*.css"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "resources": ["index.html", "src/*", "assets/*"],
+      "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline';"
+  }
 }

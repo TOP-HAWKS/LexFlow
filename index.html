@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LexFlow - Assistente Jurídico com IA</title>
+    <meta name="description" content="Assistente jurídico inteligente com IA integrada do Chrome (Gemini Nano) para análise de textos legais">
+    <meta name="keywords" content="direito, jurídico, IA, Gemini Nano, análise legal, advogado">
+    <link rel="icon" href="assets/lexflow.ico" type="image/x-icon">
+    <link rel="stylesheet" href="src/styles/main.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                ⚖️ LexFlow
+            </div>
+            <div class="user-info">
+                <span>👤 <span id="user-name">Usuário</span></span>
+                <span>|</span>
+                <span>📍 <span id="user-location">Localização</span></span>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="main-nav">
+            <button class="nav-tab active" data-view="home">🏠 Início</button>
+            <button class="nav-tab" data-view="workspace">📚 Workspace Jurídico</button>
+            <button class="nav-tab" data-view="collector">📝 Coletor & Curadoria</button>
+            <button class="nav-tab" data-view="history">📊 Histórico & Analytics</button>
+        </nav>
+
+        <!-- Content -->
+        <main class="content">
+            <!-- Home View -->
+            <div id="home-view" class="view active">
+                <div class="welcome-section">
+                    <h1 class="welcome-title">Bem-vindo ao LexFlow</h1>
+                    <p class="welcome-subtitle">Seu assistente jurídico inteligente com IA integrada</p>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number" id="stat-analyses">0</div>
+                            <div class="stat-label">Análises Realizadas</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="stat-documents">0</div>
+                            <div class="stat-label">Documentos Curados</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number" id="stat-time">0h</div>
+                            <div class="stat-label">Tempo Economizado</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="feature-grid">
+                    <div class="feature-card" data-navigate="workspace">
+                        <div class="feature-icon">🔍</div>
+                        <div class="feature-title">Pesquisa & Análise Legal</div>
+                        <div class="feature-description">
+                            Pesquise leis por jurisdição, selecione artigos relevantes e gere análises jurídicas 
+                            personalizadas com IA. Ideal para pesquisa doutrinária e fundamentação de peças.
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card" data-navigate="collector">
+                        <div class="feature-icon">📋</div>
+                        <div class="feature-title">Curadoria de Conteúdo</div>
+                        <div class="feature-description">
+                            Capture conteúdo jurídico da web, organize com metadados e gere documentos 
+                            estruturados para sua base de conhecimento ou repositório público.
+                        </div>
+                    </div>
+                    
+                    <div class="feature-card" data-navigate="history">
+                        <div class="feature-icon">📈</div>
+                        <div class="feature-title">Analytics & Histórico</div>
+                        <div class="feature-description">
+                            Acompanhe suas análises, reutilize prompts eficazes e monitore sua 
+                            produtividade jurídica com métricas detalhadas.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workspace View -->
+            <div id="workspace-view" class="view">
+                <div class="workspace-container">
+                    <!-- Sidebar -->
+                    <div class="sidebar">
+                        <div class="section-title">
+                            🌍 Configuração de Jurisdição
+                        </div>
+                        
+                        <div class="jurisdiction-selector">
+                            <div class="form-group">
+                                <label class="form-label">País</label>
+                                <select class="form-control" id="country-select">
+                                    <option value="br" selected>Brasil</option>
+                                    <option value="us">Estados Unidos</option>
+                                    <option value="es">Espanha</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Estado</label>
+                                <select class="form-control" id="state-select">
+                                    <option value="rs" selected>Rio Grande do Sul</option>
+                                    <option value="sp">São Paulo</option>
+                                    <option value="rj">Rio de Janeiro</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Cidade</label>
+                                <select class="form-control" id="city-select">
+                                    <option value="porto-alegre" selected>Porto Alegre</option>
+                                    <option value="canoas">Canoas</option>
+                                    <option value="caxias">Caxias do Sul</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="section-title">
+                            📚 Documentos Disponíveis
+                        </div>
+                        
+                        <div class="document-list" id="document-list">
+                            <!-- Documents will be populated here -->
+                        </div>
+
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label class="form-label">🔍 Buscar Artigos</label>
+                            <input type="text" class="form-control" id="search-input" placeholder="Ex: direito do consumidor">
+                        </div>
+                    </div>
+
+                    <!-- Main Panel -->
+                    <div class="main-panel">
+                        <div class="section-title">
+                            📖 Artigos Selecionados
+                        </div>
+
+                        <div class="articles-container" id="articles-container">
+                            <p style="color: #7f8c8d; text-align: center; padding: 2rem;">
+                                Selecione um documento à esquerda para visualizar os artigos
+                            </p>
+                        </div>
+
+                        <div class="selected-context" id="selected-context" style="display: none;">
+                            <div class="section-title">
+                                ✅ Contexto Selecionado
+                                <button class="clear-all-btn" id="clear-all-articles" title="Limpar todos os artigos">
+                                    🗑️ Limpar Todos
+                                </button>
+                            </div>
+                            <div id="context-items"></div>
+                        </div>
+
+                        <div class="prompt-studio">
+                            <div class="section-title">
+                                🤖 Prompt Studio
+                            </div>
+                            
+                            <div class="preset-buttons">
+                                <button class="preset-btn active" data-preset="resumo">
+                                    📝 Resumo Executivo
+                                </button>
+                                <button class="preset-btn" data-preset="analise">
+                                    🔍 Análise Jurídica
+                                </button>
+                                <button class="preset-btn" data-preset="comparacao">
+                                    ⚖️ Comparação Legal
+                                </button>
+                                <button class="preset-btn" data-preset="clausulas">
+                                    📋 Geração de Cláusulas
+                                </button>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Prompt Personalizado</label>
+                                <textarea class="form-control" rows="3" id="custom-prompt" 
+                                          placeholder="Descreva o que você gostaria que a IA analise...">Faça um resumo executivo dos artigos selecionados, destacando os principais direitos e obrigações, com linguagem acessível para apresentação ao cliente.</textarea>
+                            </div>
+
+                            <button class="btn btn-primary" id="execute-ai-btn" style="width: 100%; margin-top: 1rem;">
+                                🚀 Executar Análise com IA
+                            </button>
+
+                            <div class="ai-output" id="ai-output" style="display: none;">
+                                <div class="ai-thinking" id="ai-thinking">
+                                    <div class="spinner"></div>
+                                    Analisando com IA...
+                                </div>
+                                <div id="ai-result" style="display: none;">
+                                    <div id="result-content"></div>
+                                    <div class="result-actions">
+                                        <div class="feedback-buttons">
+                                            <button class="feedback-btn" data-feedback="positive" title="Resultado útil">
+                                                👍
+                                            </button>
+                                            <button class="feedback-btn" data-feedback="negative" title="Resultado não útil">
+                                                👎
+                                            </button>
+                                        </div>
+                                        <button class="copy-btn" id="copy-result-btn" title="Copiar resultado">
+                                            📋 Copiar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Collector View -->
+            <div id="collector-view" class="view">
+                <div class="section-title">
+                    📝 Coletor & Curadoria de Conteúdo
+                </div>
+                
+                <div class="collector-grid">
+                    <div>
+                        <div class="section-title">📥 Fila de Captura (<span id="queue-count">0</span> itens)</div>
+                        <div id="queue-items">
+                            <p style="color: #7f8c8d; text-align: center; padding: 2rem;">
+                                Nenhum item na fila. Use o botão "Adicionar Conteúdo" para começar.
+                            </p>
+                        </div>
+                        <button class="btn btn-primary" id="add-sample-content" style="margin-top: 1rem;">
+                            ➕ Adicionar Conteúdo de Exemplo
+                        </button>
+                    </div>
+
+                    <div class="editor-panel">
+                        <div class="section-title">✏️ Editor de Metadados</div>
+                        
+                        <div class="metadata-form" id="metadata-form">
+                            <p style="color: #7f8c8d; text-align: center; padding: 2rem;">
+                                Selecione um item da fila para editar
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History View -->
+            <div id="history-view" class="view">
+                <div class="section-title">
+                    📊 Histórico & Analytics
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="history-analyses">0</div>
+                        <div class="stat-label">Análises com IA</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="history-documents">0</div>
+                        <div class="stat-label">Documentos Curados</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="history-articles">0</div>
+                        <div class="stat-label">Artigos Consultados</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">89%</div>
+                        <div class="stat-label">Precisão da IA</div>
+                    </div>
+                </div>
+
+                <div class="section-title" style="margin-top: 2rem;">
+                    🕒 Análises Recentes
+                </div>
+
+                <div id="history-items">
+                    <p style="color: #7f8c8d; text-align: center; padding: 2rem;">
+                        Nenhuma análise realizada ainda. Use o Workspace Jurídico para começar.
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script type="module" src="src/js/app.js"></script>
+</body>
+</html>
