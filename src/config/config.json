@@ -17,11 +17,11 @@
   },
   "corpus": {
     "baseUrls": {
-      "br": "https://raw.githubusercontent.com/org/legal-corpus-br/main",
-      "us": "https://raw.githubusercontent.com/org/legal-corpus-us/main",
-      "es": "https://raw.githubusercontent.com/org/legal-corpus-es/main"
+      "br": "https://raw.githubusercontent.com/viniciusvollrath/legal-corpus/main",
+      "us": "https://raw.githubusercontent.com/viniciusvollrath/legal-corpus/main",
+      "es": "https://raw.githubusercontent.com/viniciusvollrath/legal-corpus/main"
     },
-    "fallbackUrl": "https://raw.githubusercontent.com/org/legal-corpus/main"
+    "fallbackUrl": "https://raw.githubusercontent.com/viniciusvollrath/legal-corpus/main"
   },
   "storage": {
     "type": "localStorage",

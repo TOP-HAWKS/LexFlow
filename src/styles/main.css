@@ -900,3 +900,143 @@ body {
     color: #6c757d;
     margin-top: 0.25rem;
 }
+/* St
+ep Navigation */
+.step-navigation {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 2rem;
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 0.5rem;
+    max-width: 400px;
+    margin: 0 auto 2rem auto;
+}
+
+.step-pill {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    text-align: center;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 500;
+    color: #7f8c8d;
+    background: transparent;
+    border: none;
+}
+
+.step-pill:hover {
+    background: rgba(52, 152, 219, 0.1);
+    color: #3498db;
+}
+
+.step-pill.active {
+    background: #3498db;
+    color: white;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+}
+
+/* Workspace Steps */
+.workspace-step {
+    display: none;
+}
+
+.workspace-step.active {
+    display: block;
+}
+
+/* Step Actions */
+.step-actions {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e9ecef;
+    text-align: center;
+}
+
+/* Prompt Studio Container */
+.prompt-studio-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.context-preview {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border-left: 4px solid #27ae60;
+}
+
+#context-summary {
+    font-size: 0.9rem;
+    color: #555;
+    line-height: 1.5;
+}
+
+.prompt-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    justify-content: center;
+}
+
+/* Loading and Empty States */
+.loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    color: #7f8c8d;
+    font-style: italic;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: #7f8c8d;
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 1rem;
+}
+
+/* Article Selection Improvements */
+.articles-container .empty-state {
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 2px dashed #e9ecef;
+}
+
+/* Button States */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.btn:disabled:hover {
+    transform: none !important;
+}
+
+/* Responsive Improvements */
+@media (max-width: 768px) {
+    .step-navigation {
+        margin: 0 1rem 2rem 1rem;
+    }
+    
+    .step-pill {
+        font-size: 0.9rem;
+        padding: 0.5rem;
+    }
+    
+    .prompt-actions {
+        flex-direction: column;
+    }
+    
+    .content {
+        padding: 1rem;
+    }
+}

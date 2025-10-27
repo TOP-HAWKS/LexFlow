@@ -11,6 +11,7 @@ import { resolveCorpusBaseUrl, loadDocumentsFromCorpus } from '../util/corpus-re
 import { setSetting, getSetting, setSettings, getAllSettings } from '../util/settings.js';
 import { submitToCorpusPR, buildMarkdownFromForm } from '../util/worker-api.js';
 import { showToast } from '../util/toast.js';
+import { fetchDocumentsFromCorpus, fetchDocumentContent, searchArticlesAcrossDocuments } from '../util/document-fetcher.js';
 
 class LexFlowApp {
     constructor() {
@@ -19,10 +20,16 @@ class LexFlowApp {
         this.toastSystem = new ToastSystem();
         
         this.currentView = 'home';
+        this.currentStep = 'laws-articles';
         this.selectedArticles = [];
+        this.selectedContext = '';
+        this.selectedCitations = [];
         this.currentDocument = null;
+        this.availableDocuments = [];
+        this.currentDocumentArticles = [];
         this.queueItems = [];
         this.historyItems = [];
+        this.aiResult = null;
         
         this.init();
     }
@@ -66,6 +73,9 @@ class LexFlowApp {
             
             // Setup event listeners
             this.setupEventListeners();
+            
+            // Load workspace state
+            this.loadWorkspaceState();
             
             // Initialize documents from corpus
             await this.initializeDocumentsFromCorpus(corpusBaseUrl);
@@ -139,15 +149,25 @@ class LexFlowApp {
             });
         });
 
-        // Jurisdiction selectors
-        document.getElementById('country-select')?.addEventListener('change', () => {
-            this.updateDocuments();
+        // Step navigation
+        document.querySelectorAll('.step-pill').forEach(pill => {
+            pill.addEventListener('click', (e) => {
+                const step = e.target.dataset.step;
+                if (step) {
+                    this.showStep(step);
+                }
+            });
         });
-        document.getElementById('state-select')?.addEventListener('change', () => {
-            this.updateDocuments();
+
+        // Step action buttons
+        document.getElementById('go-to-prompt-studio')?.addEventListener('click', () => {
+            this.goToPromptStudio();
         });
-        document.getElementById('city-select')?.addEventListener('change', () => {
-            this.updateDocuments();
+        document.getElementById('back-to-articles')?.addEventListener('click', () => {
+            this.showStep('laws-articles');
+        });
+        document.getElementById('send-to-curation')?.addEventListener('click', () => {
+            this.sendToCuration();
         });
 
         // Search input
@@ -206,28 +226,62 @@ class LexFlowApp {
 
     async initializeDocumentsFromCorpus(corpusBaseUrl) {
         try {
-            const documents = await loadDocumentsFromCorpus(corpusBaseUrl);
+            this.showDocumentsLoading(true);
+            const documents = await fetchDocumentsFromCorpus();
+            this.availableDocuments = documents;
             this.renderDocuments(documents);
+            this.showDocumentsLoading(false);
         } catch (error) {
             console.error('Error loading documents from corpus:', error);
-            // Fallback to local documents
-            this.initializeDocuments();
+            this.showDocumentsLoading(false);
+            this.showDocumentsError();
         }
     }
 
-    initializeDocuments() {
+    showDocumentsLoading(show) {
+        const loadingEl = document.getElementById('documents-loading');
         const documentList = document.getElementById('document-list');
-        const documents = this.dataManager.getDocuments();
-        this.renderDocuments(documents);
+        
+        if (show) {
+            loadingEl.style.display = 'flex';
+            documentList.innerHTML = '<div class="loading-state" id="documents-loading"><div class="spinner"></div>Loading documents...</div>';
+        } else {
+            if (loadingEl) {
+                loadingEl.style.display = 'none';
+            }
+        }
+    }
+
+    showDocumentsError() {
+        const documentList = document.getElementById('document-list');
+        documentList.innerHTML = `
+            <div class="empty-state">
+                <p>No articles found for this document</p>
+                <small>Try changing the document or search term</small>
+                <button class="btn btn-secondary" onclick="window.app.initializeDocumentsFromCorpus()" style="margin-top: 1rem;">
+                    🔄 Retry
+                </button>
+            </div>
+        `;
     }
 
     renderDocuments(documents) {
         const documentList = document.getElementById('document-list');
         
+        if (documents.length === 0) {
+            documentList.innerHTML = `
+                <div class="empty-state">
+                    <p>No documents available</p>
+                    <small>Check your connection and try again</small>
+                </div>
+            `;
+            return;
+        }
+        
         documentList.innerHTML = documents.map(doc => `
             <div class="document-item" data-doc-id="${doc.id}">
                 <div class="document-title">${doc.title}</div>
-                <div class="document-meta">${doc.scope} • ${doc.articles} articles</div>
+                <div class="document-meta">${doc.scope} • ${doc.jurisdiction} • ${doc.year}</div>
             </div>
         `).join('');
 
@@ -269,63 +323,94 @@ class LexFlowApp {
         });
         
         this.currentView = viewName;
+        
+        // Reset workspace to first step when switching to workspace
+        if (viewName === 'workspace') {
+            this.showStep('laws-articles');
+        }
     }
 
-    selectDocument(element, docId) {
+    async selectDocument(element, docId) {
         // Update UI
         document.querySelectorAll('.document-item').forEach(item => {
             item.classList.remove('selected');
         });
         element.classList.add('selected');
         
-        this.currentDocument = docId;
-        this.displayArticles(docId);
-    }
-
-    displayArticles(docId) {
-        const container = document.getElementById('articles-container');
-        const articles = this.dataManager.getArticles(docId);
-        
-        if (articles.length === 0) {
-            container.innerHTML = '<p style="color: #7f8c8d; text-align: center; padding: 2rem;">Nenhum artigo encontrado para este documento.</p>';
-            return;
+        this.currentDocument = this.availableDocuments.find(doc => doc.id === docId);
+        if (this.currentDocument) {
+            await this.displayArticles(this.currentDocument);
         }
-        
-        container.innerHTML = articles.map(article => `
-            <div class="article-item" data-doc-id="${docId}" data-article-number="${article.number}">
-                <div class="article-number">${article.number}</div>
-                <div class="article-content">${article.content}</div>
-            </div>
-        `).join('');
-
-        // Add event listeners to article items
-        container.querySelectorAll('.article-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                const docId = e.currentTarget.dataset.docId;
-                const articleNumber = e.currentTarget.dataset.articleNumber;
-                this.toggleArticle(e.currentTarget, docId, articleNumber);
-            });
-        });
     }
 
-    toggleArticle(element, docId, articleNumber) {
+    async displayArticles(document) {
+        const container = document.getElementById('articles-container');
+        
+        // Show loading state
+        container.innerHTML = `
+            <div class="loading-state">
+                <div class="spinner"></div>
+                Loading articles...
+            </div>
+        `;
+        
+        try {
+            const articles = await fetchDocumentContent(document);
+            this.currentDocumentArticles = articles;
+            
+            if (articles.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p>No articles found for this document</p>
+                        <small>Try changing the document or search term</small>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = articles.map(article => `
+                <div class="article-item" data-article-id="${article.id}">
+                    <div class="article-number">${article.number}</div>
+                    <div class="article-content">${article.content}</div>
+                </div>
+            `).join('');
+
+            // Add event listeners to article items
+            container.querySelectorAll('.article-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    const articleId = e.currentTarget.dataset.articleId;
+                    this.toggleArticle(e.currentTarget, articleId);
+                });
+            });
+            
+        } catch (error) {
+            console.error('Error loading articles:', error);
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p>Error loading articles</p>
+                    <small>Please try again</small>
+                    <button class="btn btn-secondary" onclick="window.app.displayArticles(window.app.currentDocument)" style="margin-top: 1rem;">
+                        🔄 Retry
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    toggleArticle(element, articleId) {
         element.classList.toggle('selected');
         
-        const article = this.dataManager.getArticle(docId, articleNumber);
-        const articleId = `${docId}-${articleNumber}`;
+        const article = this.currentDocumentArticles.find(a => a.id === articleId);
+        if (!article) return;
         
         if (element.classList.contains('selected')) {
-            this.selectedArticles.push({
-                id: articleId,
-                document: docId,
-                number: articleNumber,
-                content: article.content
-            });
+            this.selectedArticles.push(article);
         } else {
             this.selectedArticles = this.selectedArticles.filter(a => a.id !== articleId);
         }
         
         this.updateSelectedContext();
+        this.updateGoToPromptStudioButton();
     }
 
     updateSelectedContext() {
@@ -341,7 +426,7 @@ class LexFlowApp {
                         ${article.content.substring(0, 150)}...
                     </div>
                     <div class="context-actions">
-                        <button class="icon-btn delete" data-article-id="${article.id}" title="Remover artigo">
+                        <button class="icon-btn delete" data-article-id="${article.id}" title="Remove article">
                             ❌
                         </button>
                     </div>
@@ -355,8 +440,32 @@ class LexFlowApp {
                     this.removeArticle(articleId);
                 });
             });
+            
+            // Update context for prompt studio
+            this.buildSelectedContext();
         } else {
             contextContainer.style.display = 'none';
+            this.selectedContext = '';
+            this.selectedCitations = [];
+        }
+    }
+
+    buildSelectedContext() {
+        this.selectedContext = this.selectedArticles.map(article => 
+            `${article.number}: ${article.content}`
+        ).join('\n\n');
+        
+        this.selectedCitations = this.selectedArticles.map(article => ({
+            number: article.number,
+            citation: article.citation,
+            document: article.document
+        }));
+    }
+
+    updateGoToPromptStudioButton() {
+        const button = document.getElementById('go-to-prompt-studio');
+        if (button) {
+            button.disabled = this.selectedArticles.length === 0;
         }
     }
 
@@ -367,19 +476,106 @@ class LexFlowApp {
         // Remove visual selection
         const articleElements = document.querySelectorAll('.article-item');
         articleElements.forEach(element => {
-            const articleNumber = element.querySelector('.article-number').textContent;
-            const fullId = `${this.currentDocument}-${articleNumber}`;
-            if (fullId === articleId) {
+            if (element.dataset.articleId === articleId) {
                 element.classList.remove('selected');
             }
         });
         
         this.updateSelectedContext();
-        this.toastSystem.show('Artigo removido do contexto', 'success');
+        this.updateGoToPromptStudioButton();
+        this.toastSystem.show('Article removed from context', 'success');
+    }
+
+    showStep(stepName) {
+        // Update step pills
+        document.querySelectorAll('.step-pill').forEach(pill => {
+            pill.classList.remove('active');
+        });
+        document.querySelector(`[data-step="${stepName}"]`).classList.add('active');
+        
+        // Update step content
+        document.querySelectorAll('.workspace-step').forEach(step => {
+            step.classList.remove('active');
+        });
+        document.getElementById(`step-${stepName}`).classList.add('active');
+        
+        this.currentStep = stepName;
+        
+        // Save state to sessionStorage
+        this.saveWorkspaceState();
+        
+        if (stepName === 'prompt-studio') {
+            this.updatePromptStudioContext();
+        }
+    }
+
+    goToPromptStudio() {
+        if (this.selectedArticles.length === 0) {
+            this.toastSystem.show('Please select at least one article', 'error');
+            return;
+        }
+        
+        this.showStep('prompt-studio');
+    }
+
+    updatePromptStudioContext() {
+        const contextSummary = document.getElementById('context-summary');
+        if (contextSummary && this.selectedArticles.length > 0) {
+            const summary = `${this.selectedArticles.length} article(s) selected from ${this.currentDocument?.title || 'document'}:\n\n` +
+                this.selectedArticles.map(article => `• ${article.number}`).join('\n');
+            
+            contextSummary.textContent = summary;
+        }
+    }
+
+    saveWorkspaceState() {
+        const state = {
+            currentStep: this.currentStep,
+            selectedArticles: this.selectedArticles,
+            selectedContext: this.selectedContext,
+            selectedCitations: this.selectedCitations,
+            currentDocument: this.currentDocument,
+            aiResult: this.aiResult
+        };
+        
+        try {
+            sessionStorage.setItem('lexflow-workspace-state', JSON.stringify(state));
+        } catch (error) {
+            console.error('Error saving workspace state:', error);
+        }
+    }
+
+    loadWorkspaceState() {
+        try {
+            const saved = sessionStorage.getItem('lexflow-workspace-state');
+            if (saved) {
+                const state = JSON.parse(saved);
+                this.currentStep = state.currentStep || 'laws-articles';
+                this.selectedArticles = state.selectedArticles || [];
+                this.selectedContext = state.selectedContext || '';
+                this.selectedCitations = state.selectedCitations || [];
+                this.currentDocument = state.currentDocument || null;
+                this.aiResult = state.aiResult || null;
+                
+                // Restore UI state
+                if (this.currentStep !== 'laws-articles') {
+                    this.showStep(this.currentStep);
+                }
+                
+                if (this.selectedArticles.length > 0) {
+                    this.updateSelectedContext();
+                    this.updateGoToPromptStudioButton();
+                }
+            }
+        } catch (error) {
+            console.error('Error loading workspace state:', error);
+        }
     }
 
     clearAllArticles() {
         this.selectedArticles = [];
+        this.selectedContext = '';
+        this.selectedCitations = [];
         
         // Remove all visual selections
         document.querySelectorAll('.article-item.selected').forEach(element => {
@@ -387,7 +583,66 @@ class LexFlowApp {
         });
         
         this.updateSelectedContext();
-        this.toastSystem.show('Todos os artigos foram removidos', 'success');
+        this.updateGoToPromptStudioButton();
+        this.toastSystem.show('All articles have been removed', 'success');
+    }
+
+    sendToCuration() {
+        if (this.selectedArticles.length === 0) {
+            this.toastSystem.show('Please select at least one article', 'error');
+            return;
+        }
+
+        // Create curation item
+        const curationItem = {
+            id: Date.now(),
+            title: this.generateCurationTitle(),
+            jurisdiction: this.currentDocument?.jurisdiction || 'US/Federal',
+            language: 'en-US',
+            source_url: this.generateSourceUrls(),
+            captured_text: this.selectedContext,
+            notes: this.aiResult ? `AI Analysis: ${this.aiResult.prompt}` : 'Selected articles for curation',
+            citations: this.selectedCitations,
+            status: 'queued',
+            timestamp: new Date().toISOString(),
+            mode: 'selection',
+            category: 'Constitutional Law'
+        };
+
+        // Add to queue
+        this.queueItems.unshift(curationItem);
+        
+        // Switch to collector view and show the new item
+        this.showView('collector');
+        this.updateCollectorView();
+        
+        // Select the new item
+        setTimeout(() => {
+            const firstQueueItem = document.querySelector('.queue-item');
+            if (firstQueueItem) {
+                this.selectQueueItem(firstQueueItem, 0);
+            }
+        }, 100);
+
+        this.toastSystem.show('Content sent to curation queue', 'success');
+    }
+
+    generateCurationTitle() {
+        if (this.selectedArticles.length === 1) {
+            return `${this.currentDocument?.title} — ${this.selectedArticles[0].number}`;
+        } else {
+            const firstCitation = this.selectedArticles[0].number;
+            return `${this.currentDocument?.title} — ${firstCitation} (${this.selectedArticles.length} articles)`;
+        }
+    }
+
+    generateSourceUrls() {
+        // Map corpus path back to public raw URL
+        if (this.currentDocument?.path) {
+            const corpusBaseUrl = localStorage.getItem('lexflow-corpus-base-url') || 'https://raw.githubusercontent.com/viniciusvollrath/legal-corpus/main';
+            return `${corpusBaseUrl}/${this.currentDocument.path}`;
+        }
+        return '';
     }
 
     selectPreset(element, presetType) {
@@ -397,46 +652,43 @@ class LexFlowApp {
         element.classList.add('active');
         
         const prompts = {
-            'resumo': 'Faça um resumo executivo dos artigos selecionados, destacando os principais direitos e obrigações, com linguagem acessível para apresentação ao cliente.',
-            'analise': 'Realize uma análise jurídica detalhada dos artigos selecionados, identificando possíveis conflitos, lacunas e interpretações doutrinárias relevantes.',
-            'comparacao': 'Compare os artigos selecionados, identificando semelhanças, diferenças e possíveis hierarquias normativas entre eles.',
-            'clausulas': 'Com base nos artigos selecionados, gere cláusulas contratuais práticas que estejam em conformidade com a legislação apresentada.'
+            'executive-summary': 'Create an executive summary of the selected articles, highlighting the main rights and obligations, using accessible language for presentation to the client.',
+            'legal-analysis': 'Perform a detailed legal analysis of the selected articles, identifying potential conflicts, gaps, and relevant doctrinal interpretations.',
+            'legal-comparison': 'Compare the selected articles, identifying similarities, differences, and possible normative hierarchies between them.',
+            'clause-generation': 'Based on the selected articles, generate practical contractual clauses that comply with the presented legislation.'
         };
         
-        document.getElementById('custom-prompt').value = prompts[presetType];
+        document.getElementById('custom-prompt').value = prompts[presetType] || prompts['executive-summary'];
     }
 
     async executeAI() {
         if (this.selectedArticles.length === 0) {
-            this.toastSystem.show('Selecione pelo menos um artigo para análise', 'error');
+            this.toastSystem.show('Please select at least one article for analysis', 'error');
             return;
         }
 
         const outputContainer = document.getElementById('ai-output');
         const thinkingDiv = document.getElementById('ai-thinking');
         const resultDiv = document.getElementById('ai-result');
+        const sendToCurationBtn = document.getElementById('send-to-curation');
         
         outputContainer.style.display = 'block';
         thinkingDiv.style.display = 'flex';
         resultDiv.style.display = 'none';
+        sendToCurationBtn.style.display = 'none';
 
         try {
             // Check Chrome AI availability
             const aiStatus = await this.chromeAI.checkAvailability();
             if (!aiStatus.prompt) {
-                throw new Error('Chrome AI não está disponível. Verifique as configurações.');
+                throw new Error('Chrome AI is not available. Please check your Chrome settings.');
             }
 
-            // Prepare context
-            const context = this.selectedArticles.map(article => 
-                `${article.number}: ${article.content}`
-            ).join('\n\n');
+            const systemPrompt = `You are a legal assistant specialized in legal analysis. 
+            Analyze the provided legal texts with technical precision and language appropriate for legal professionals.
+            Provide structured, practical, and well-founded analyses.`;
 
-            const systemPrompt = `Você é um assistente jurídico especializado em direito brasileiro. 
-            Analise os textos legais fornecidos com precisão técnica e linguagem apropriada para profissionais do direito.
-            Forneça análises estruturadas, práticas e fundamentadas.`;
-
-            const userPrompt = document.getElementById('custom-prompt').value + '\n\nArtigos para análise:\n' + context;
+            const userPrompt = document.getElementById('custom-prompt').value + '\n\nArticles for analysis:\n' + this.selectedContext;
 
             // Execute AI analysis
             const result = await this.chromeAI.analyzeText(systemPrompt, userPrompt);
@@ -445,27 +697,62 @@ class LexFlowApp {
                 // Show result
                 thinkingDiv.style.display = 'none';
                 resultDiv.style.display = 'block';
+                sendToCurationBtn.style.display = 'inline-block';
                 
                 const formattedResult = this.formatAIResult(result.result);
                 document.getElementById('result-content').innerHTML = formattedResult;
                 
+                // Store result for curation
+                this.aiResult = {
+                    prompt: userPrompt,
+                    result: result.result,
+                    timestamp: new Date().toISOString()
+                };
+                
                 // Save to history
                 await this.saveAnalysisToHistory(userPrompt, result.result);
                 
-                this.toastSystem.show('Análise concluída com sucesso!', 'success');
+                this.toastSystem.show('Analysis completed successfully!', 'success');
             } else {
-                throw new Error(result.message || 'Erro na análise com IA');
+                throw new Error(result.message || 'Error in AI analysis');
             }
 
         } catch (error) {
             console.error('AI execution error:', error);
             thinkingDiv.style.display = 'none';
             
-            // Show fallback result for demo purposes
-            this.showFallbackResult();
+            // Show info banner about Chrome AI availability
+            this.showAIUnavailableBanner();
             
-            this.toastSystem.show('Usando resultado de demonstração (Chrome AI não disponível)', 'warning', 8000);
+            this.toastSystem.show('Chrome AI not available. Please check your Chrome settings.', 'warning', 8000);
         }
+    }
+
+    showAIUnavailableBanner() {
+        const resultDiv = document.getElementById('ai-result');
+        resultDiv.style.display = 'block';
+        
+        document.getElementById('result-content').innerHTML = `
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                <h4 style="color: #856404; margin: 0 0 0.5rem 0;">🔧 Chrome Built-in AI Not Available</h4>
+                <p style="color: #856404; margin: 0;">
+                    Chrome Built-in AI (Gemini Nano) is not available in your browser. 
+                    To use AI analysis features, please:
+                </p>
+                <ul style="color: #856404; margin: 0.5rem 0 0 1rem;">
+                    <li>Use Chrome Canary (version 120+)</li>
+                    <li>Enable the "Prompt API for Gemini Nano" flag</li>
+                    <li>Enable the "Built-in AI API" flag</li>
+                    <li>Restart your browser</li>
+                </ul>
+                <p style="color: #856404; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                    You can still use the "Send to Curation" feature to process your selected articles.
+                </p>
+            </div>
+        `;
+        
+        // Show send to curation button even without AI result
+        document.getElementById('send-to-curation').style.display = 'inline-block';
     }
 
     showFallbackResult() {
@@ -567,20 +854,24 @@ class LexFlowApp {
             return;
         }
         
-        const articles = this.dataManager.getArticles(this.currentDocument);
-        const filtered = articles.filter(article => 
+        const filtered = this.currentDocumentArticles.filter(article => 
             article.content.toLowerCase().includes(term.toLowerCase()) ||
             article.number.toLowerCase().includes(term.toLowerCase())
         );
         
         const container = document.getElementById('articles-container');
         if (filtered.length === 0) {
-            container.innerHTML = '<p style="color: #7f8c8d; text-align: center; padding: 2rem;">Nenhum artigo encontrado para o termo pesquisado.</p>';
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p>No articles found for the search term</p>
+                    <small>Try a different search term</small>
+                </div>
+            `;
             return;
         }
         
         container.innerHTML = filtered.map(article => `
-            <div class="article-item" data-doc-id="${this.currentDocument}" data-article-number="${article.number}">
+            <div class="article-item ${this.selectedArticles.find(a => a.id === article.id) ? 'selected' : ''}" data-article-id="${article.id}">
                 <div class="article-number">${article.number}</div>
                 <div class="article-content">${article.content}</div>
             </div>
@@ -589,9 +880,8 @@ class LexFlowApp {
         // Add event listeners to filtered articles
         container.querySelectorAll('.article-item').forEach(item => {
             item.addEventListener('click', (e) => {
-                const docId = e.currentTarget.dataset.docId;
-                const articleNumber = e.currentTarget.dataset.articleNumber;
-                this.toggleArticle(e.currentTarget, docId, articleNumber);
+                const articleId = e.currentTarget.dataset.articleId;
+                this.toggleArticle(e.currentTarget, articleId);
             });
         });
     }
@@ -730,8 +1020,8 @@ class LexFlowApp {
             </div>
             
             <div class="form-group">
-                <label class="form-label">Data da Versão</label>
-                <input type="date" class="form-control" id="edit-version-date" 
+                <label class="form-label">Version Date</label>
+                <input type="date" class="form-control" id="edit-version-date"ass="form-control" id="edit-version-date" 
                        value="${item.version_date || new Date().toISOString().split('T')[0]}">
             </div>
             
@@ -757,38 +1047,38 @@ class LexFlowApp {
             </div>
             
             <div class="form-group">
-                <label class="form-label">Texto Capturado *</label>
-                <textarea class="form-control" rows="6" id="edit-text" required>${(item.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
-                <small class="form-text">${item.text?.length || 0} caracteres</small>
+                <label class="form-label">Captured Text *</label>
+                <textarea class="form-control" rows="6" id="edit-text" required>${(item.captured_text || item.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+                <small class="form-text">${(item.captured_text || item.text || '').length || 0} characters</small>
             </div>
             
             <div class="form-group">
-                <label class="form-label">Resumo/Observações</label>
+                <label class="form-label">Summary/Notes</label>
                 <textarea class="form-control" rows="3" id="edit-summary" 
-                          placeholder="Adicione um resumo ou observações sobre este conteúdo">${(item.summary || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+                          placeholder="Add a summary or notes about this content">${(item.notes || item.summary || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
             </div>
             
             <div class="form-group">
-                <label class="form-label">Impacto Jurídico</label>
+                <label class="form-label">Legal Impact</label>
                 <select class="form-control" id="edit-impact">
-                    <option value="alto" ${item.impact === 'alto' ? 'selected' : ''}>Alto - Precedente vinculante</option>
-                    <option value="medio" ${item.impact === 'medio' ? 'selected' : ''}>Médio - Orientação jurisprudencial</option>
-                    <option value="baixo" ${item.impact === 'baixo' ? 'selected' : ''}>Baixo - Caso específico</option>
-                    <option value="informativo" ${item.impact === 'informativo' ? 'selected' : ''}>Informativo</option>
+                    <option value="high" ${item.impact === 'high' ? 'selected' : ''}>High - Binding precedent</option>
+                    <option value="medium" ${item.impact === 'medium' ? 'selected' : ''}>Medium - Jurisprudential guidance</option>
+                    <option value="low" ${item.impact === 'low' ? 'selected' : ''}>Low - Specific case</option>
+                    <option value="informational" ${item.impact === 'informational' ? 'selected' : ''}>Informational</option>
                 </select>
             </div>
             
             <div class="form-actions" style="margin-top: 1.5rem;">
                 <button class="btn btn-primary" data-action="save-metadata" data-item-id="${item.id}">
-                    💾 Salvar Metadados
+                    💾 Save Metadata
                 </button>
                 
                 <button class="btn btn-success" data-action="process-item" data-item-id="${item.id}" style="margin-top: 0.5rem;">
-                    ✅ Processar & Gerar Markdown
+                    ✅ Process & Generate Markdown
                 </button>
                 
                 <button class="btn btn-secondary" data-action="generate-pr" data-item-id="${item.id}" style="margin-top: 0.5rem;">
-                    🔄 Criar Pull Request
+                    🔄 Create Pull Request
                 </button>
             </div>
         `;
@@ -826,8 +1116,10 @@ class LexFlowApp {
                 source_url: document.getElementById('edit-source-url').value,
                 version_date: document.getElementById('edit-version-date').value,
                 category: document.getElementById('edit-category').value,
-                text: document.getElementById('edit-text').value,
-                summary: document.getElementById('edit-summary').value,
+                captured_text: document.getElementById('edit-text').value,
+                text: document.getElementById('edit-text').value, // Keep both for compatibility
+                notes: document.getElementById('edit-summary').value,
+                summary: document.getElementById('edit-summary').value, // Keep both for compatibility
                 impact: document.getElementById('edit-impact').value,
                 tags: document.getElementById('edit-tags').value.split(',').map(t => t.trim()).filter(t => t),
                 lastModified: new Date().toISOString()
@@ -854,10 +1146,10 @@ class LexFlowApp {
             // Build form data for markdown generation
             const formData = {
                 title: document.getElementById('edit-title').value,
-                jurisdiction: this.formatJurisdictionForSubmission(item.jurisdiction),
+                jurisdiction: typeof item.jurisdiction === 'string' ? item.jurisdiction : this.formatJurisdictionForSubmission(item.jurisdiction),
                 language: document.getElementById('edit-language').value,
                 sourceUrl: document.getElementById('edit-source-url').value,
-                versionDate: document.getElementById('edit-version-date').value,
+                versionDate: document.getElementById('edit-version-date').value || new Date().toISOString().split('T')[0],
                 docType: document.getElementById('edit-category').value,
                 text: document.getElementById('edit-text').value
             };
@@ -891,10 +1183,10 @@ class LexFlowApp {
             // Build form data
             const formData = {
                 title: document.getElementById('edit-title').value,
-                jurisdiction: this.formatJurisdictionForSubmission(item.jurisdiction),
+                jurisdiction: typeof item.jurisdiction === 'string' ? item.jurisdiction : this.formatJurisdictionForSubmission(item.jurisdiction),
                 language: document.getElementById('edit-language').value,
                 sourceUrl: document.getElementById('edit-source-url').value,
-                versionDate: document.getElementById('edit-version-date').value,
+                versionDate: document.getElementById('edit-version-date').value || new Date().toISOString().split('T')[0],
                 docType: document.getElementById('edit-category').value,
                 text: document.getElementById('edit-text').value
             };

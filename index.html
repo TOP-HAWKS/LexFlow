@@ -88,108 +88,112 @@
 
             <!-- Workspace View -->
             <div id="workspace-view" class="view">
-                <div class="workspace-container">
-                    <!-- Sidebar -->
-                    <div class="sidebar">
-                        <div class="section-title">
-                            🌍 Jurisdiction Configuration
-                        </div>
-
-                        <div class="jurisdiction-selector">
-                            <div class="form-group">
-                                <label class="form-label">Country</label>
-                                <select class="form-control" id="country-select">
-                                    <option value="us" selected>US</option>
-                                    <option value="br">Brazil</option>
-                                    <option value="es">Spain</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label">State</label>
-                                <select class="form-control" id="state-select">
-                                    <option value="rs" selected>Rio Grande do Sul</option>
-                                    <option value="sp">São Paulo</option>
-                                    <option value="rj">Rio de Janeiro</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label">Cidade</label>
-                                <select class="form-control" id="city-select">
-                                    <option value="porto-alegre" selected>Porto Alegre</option>
-                                    <option value="canoas">Canoas</option>
-                                    <option value="caxias">Caxias do Sul</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="section-title">
-                            📚 Available Documents
-                        </div>
-
-                        <div class="document-list" id="document-list">
-                            <!-- Documents will be populated here -->
-                        </div>
-
-                        <div class="form-group" style="margin-top: 1rem;">
-                            <label class="form-label">🔍 Search Articles</label>
-                            <input type="text" class="form-control" id="search-input"
-                                placeholder="Ex: consumer law">
-                        </div>
+                <!-- Step Navigation Pills -->
+                <div class="step-navigation">
+                    <div class="step-pill active" data-step="laws-articles">
+                        📚 Laws & Articles
                     </div>
+                    <div class="step-pill" data-step="prompt-studio">
+                        🤖 Prompt Studio
+                    </div>
+                </div>
 
-                    <!-- Main Panel -->
-                    <div class="main-panel">
-                        <div class="section-title">
-                            📖 Selected Articles
-                        </div>
-
-                        <div class="articles-container" id="articles-container">
-                            <p style="color: #7f8c8d; text-align: center; padding: 2rem;">
-                                Select a document on the left to view the articles
-                            </p>
-                        </div>
-
-                        <div class="selected-context" id="selected-context" style="display: none;">
+                <!-- Step 1: Laws & Articles -->
+                <div id="step-laws-articles" class="workspace-step active">
+                    <div class="workspace-container">
+                        <!-- Left Panel: Available Documents -->
+                        <div class="sidebar">
                             <div class="section-title">
-                                ✅ Selected Context
-                                <button class="clear-all-btn" id="clear-all-articles" title="Limpar todos os artigos">
-                                    🗑️ Clear All
+                                📚 Available Documents
+                            </div>
+
+                            <div class="document-list" id="document-list">
+                                <div class="loading-state" id="documents-loading">
+                                    <div class="spinner"></div>
+                                    Loading documents...
+                                </div>
+                            </div>
+
+                            <div class="form-group" style="margin-top: 1rem;">
+                                <label class="form-label">🔍 Search Articles</label>
+                                <input type="text" class="form-control" id="search-input"
+                                    placeholder="Search articles...">
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Selected Articles -->
+                        <div class="main-panel">
+                            <div class="section-title">
+                                📖 Article Selection
+                            </div>
+
+                            <div class="articles-container" id="articles-container">
+                                <div class="empty-state">
+                                    <p>Select a document on the left to view available articles</p>
+                                </div>
+                            </div>
+
+                            <div class="selected-context" id="selected-context" style="display: none;">
+                                <div class="section-title">
+                                    ✅ Selected Articles
+                                    <button class="clear-all-btn" id="clear-all-articles" title="Clear all articles">
+                                        🗑️ Clear All
+                                    </button>
+                                </div>
+                                <div id="context-items"></div>
+                            </div>
+
+                            <div class="step-actions">
+                                <button class="btn btn-primary" id="go-to-prompt-studio" disabled>
+                                    Go to Prompt Studio →
                                 </button>
                             </div>
-                            <div id="context-items"></div>
                         </div>
+                    </div>
+                </div>
 
-                        <div class="prompt-studio">
+                <!-- Step 2: Prompt Studio -->
+                <div id="step-prompt-studio" class="workspace-step">
+                    <div class="workspace-container">
+                        <div class="prompt-studio-container">
                             <div class="section-title">
                                 🤖 Prompt Studio
                             </div>
 
+                            <div class="context-preview" id="context-preview">
+                                <div class="section-title">Selected Context</div>
+                                <div id="context-summary"></div>
+                            </div>
+
                             <div class="preset-buttons">
-                                <button class="preset-btn active" data-preset="resumo">
+                                <button class="preset-btn active" data-preset="executive-summary">
                                     📝 Executive Summary
                                 </button>
-                                <button class="preset-btn" data-preset="analise">
+                                <button class="preset-btn" data-preset="legal-analysis">
                                     🔍 Legal Analysis
                                 </button>
-                                <button class="preset-btn" data-preset="comparacao">
+                                <button class="preset-btn" data-preset="legal-comparison">
                                     ⚖️ Legal Comparison
                                 </button>
-                                <button class="preset-btn" data-preset="clausulas">
+                                <button class="preset-btn" data-preset="clause-generation">
                                     📋 Clause Generation
                                 </button>
                             </div>
 
                             <div class="form-group">
                                 <label class="form-label">Custom Prompt</label>
-                                <textarea class="form-control" rows="3" id="custom-prompt"
-                                    placeholder="Descreva o que você gostaria que a IA analise...">Create an executive summary of the selected articles, highlighting the main rights and obligations, using accessible language for presentation to the client.</textarea>
+                                <textarea class="form-control" rows="4" id="custom-prompt"
+                                    placeholder="Describe what you would like the AI to analyze...">Create an executive summary of the selected articles, highlighting the main rights and obligations, using accessible language for presentation to the client.</textarea>
                             </div>
 
-                            <button class="btn btn-primary" id="execute-ai-btn" style="width: 100%; margin-top: 1rem;">
-                                🚀 Perform Analysis with AI
-                            </button>
+                            <div class="prompt-actions">
+                                <button class="btn btn-primary" id="execute-ai-btn">
+                                    🚀 Perform Analysis with AI
+                                </button>
+                                <button class="btn btn-secondary" id="send-to-curation" style="display: none;">
+                                    📝 Send to Curation
+                                </button>
+                            </div>
 
                             <div class="ai-output" id="ai-output" style="display: none;">
                                 <div class="ai-thinking" id="ai-thinking">
@@ -214,6 +218,12 @@
                                         </button>
                                     </div>
                                 </div>
+                            </div>
+
+                            <div class="step-actions">
+                                <button class="btn btn-secondary" id="back-to-articles">
+                                    ← Back to Articles
+                                </button>
                             </div>
                         </div>
                     </div>
