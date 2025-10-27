@@ -48,6 +48,7 @@ class MockLexFlowApp {
     navigate(route) {
         if (this.routes[route]) {
             window.location.hash = route;
+            this.handleRouteChange();
         }
     }
 

@@ -125,6 +125,7 @@ export class ToastSystem {
 
         toast.classList.remove('show');
         toast.classList.add('hide');
+        toast.classList.add('removing');
 
         setTimeout(() => {
             if (toast.parentNode) {

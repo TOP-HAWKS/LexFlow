@@ -153,7 +153,11 @@ class MockToastSystem {
 
         const action = toastData.config.actions.find(a => a.id === actionId);
         if (action && action.handler) {
-            action.handler();
+            try {
+                action.handler();
+            } catch (error) {
+                console.error('Toast action handler error', error);
+            }
         }
 
         if (!toastData.config.persistent) {
@@ -168,11 +172,11 @@ class MockToastSystem {
         const toast = toastData.element;
         toast.classList.add('removing');
 
-        // Remove immediately for tests
+        this.toastQueue = this.toastQueue.filter(t => t.id !== toastId);
+
         if (toast.parentNode) {
             toast.parentNode.removeChild(toast);
         }
-        this.toastQueue = this.toastQueue.filter(t => t.id !== toastId);
     }
 
     hideOldest() {
@@ -434,12 +438,12 @@ describe('Toast System', () => {
 
         it('should dismiss toast manually via close button', () => {
             const toastId = toastSystem.show('Manual dismiss');
+            const toast = container.querySelector('.toast');
             const closeBtn = container.querySelector('.toast-close');
-            
+
             closeBtn.click();
             
             // Should start removal process
-            const toast = container.querySelector('.toast');
             expect(toast.classList.contains('removing')).toBe(true);
         });
 
@@ -514,11 +518,11 @@ describe('Toast System', () => {
                 actions: actions
             });
             
+            const toast = container.querySelector('.toast');
             const actionBtn = container.querySelector('[data-action-id="action"]');
             actionBtn.click();
             
             // Should be marked for removal
-            const toast = container.querySelector('.toast');
             expect(toast.classList.contains('removing')).toBe(true);
         });
 

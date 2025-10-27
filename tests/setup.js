@@ -5,6 +5,36 @@
 
 import { vi } from 'vitest';
 
+function createStorageMock() {
+  const store = new Map();
+
+  const storage = {
+    getItem: vi.fn((key) => (store.has(key) ? store.get(key) : null)),
+    setItem: vi.fn((key, value) => {
+      store.set(key, String(value));
+    }),
+    removeItem: vi.fn((key) => {
+      store.delete(key);
+    }),
+    clear: vi.fn(() => {
+      store.clear();
+    }),
+    key: vi.fn((index) => {
+      const keys = Array.from(store.keys());
+      return keys[index] ?? null;
+    }),
+    _store: store
+  };
+
+  Object.defineProperty(storage, 'length', {
+    get() {
+      return store.size;
+    }
+  });
+
+  return storage;
+}
+
 // Mock Chrome extension APIs
 global.chrome = {
   storage: {
@@ -48,18 +78,12 @@ Object.defineProperty(global.navigator, 'onLine', {
 });
 
 // Mock localStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-  length: 0,
-  key: vi.fn()
-};
+const localStorageMock = createStorageMock();
 global.localStorage = localStorageMock;
 
 // Mock sessionStorage
-global.sessionStorage = localStorageMock;
+const sessionStorageMock = createStorageMock();
+global.sessionStorage = sessionStorageMock;
 
 // Mock requestAnimationFrame
 global.requestAnimationFrame = vi.fn((cb) => setTimeout(cb, 16));
@@ -80,6 +104,8 @@ beforeEach(() => {
   
   // Reset all mocks
   vi.clearAllMocks();
+  localStorageMock._store.clear();
+  sessionStorageMock._store.clear();
   
   // Reset location hash
   window.location.hash = '';

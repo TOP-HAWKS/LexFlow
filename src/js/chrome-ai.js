@@ -3,6 +3,16 @@
  * Handles Gemini Nano API calls with proper error handling
  */
 
+function getAIScope() {
+    if (typeof self !== 'undefined' && self.ai) {
+        return self.ai;
+    }
+    if (typeof navigator !== 'undefined' && navigator.ai) {
+        return navigator.ai;
+    }
+    return null;
+}
+
 export class ChromeAI {
     constructor() {
         this.available = null;
@@ -17,10 +27,15 @@ export class ChromeAI {
     async checkAvailability() {
         if (this.available) return this.available;
 
+        const aiScope = getAIScope();
+
+        const hasSummarizerProperty = !!(aiScope && ('summarizer' in aiScope));
+        const hasSummarizerFactory = !!(aiScope && typeof aiScope?.createSummarizer === 'function');
+
         this.available = {
-            ai: 'ai' in self,
-            prompt: 'ai' in self && 'assistant' in self.ai,
-            summarizer: 'ai' in self && 'summarizer' in self.ai,
+            ai: !!aiScope,
+            prompt: !!(aiScope && ('assistant' in aiScope)),
+            summarizer: hasSummarizerProperty || hasSummarizerFactory,
             chromeVersion: this.getChromeVersion(),
             isCanary: this.isChromeCanary()
         };
@@ -80,10 +95,101 @@ export class ChromeAI {
      * @param {Object} options - Summarizer options
      * @returns {Object} AI summarizer instance
      */
-    async createSummarizer(options = {}) {
+    async ensureSummarizerAvailability(hooks = {}) {
+        const aiScope = getAIScope();
+        const hasSummarizerProperty = !!aiScope?.summarizer;
+        const hasSummarizerFactory = typeof aiScope?.createSummarizer === 'function';
+
+        if (!hasSummarizerProperty && !hasSummarizerFactory) {
+            return { ready: false, status: 'unavailable' };
+        }
+
+        if (!hasSummarizerProperty) {
+            // Some builds expõem apenas o factory createSummarizer.
+            return { ready: true, status: 'factory-only' };
+        }
+
+        const capabilitiesFn = aiScope.summarizer?.capabilities;
+        if (typeof capabilitiesFn !== 'function') {
+            return { ready: true, status: 'readily' };
+        }
+
+        try {
+            const capabilities = await capabilitiesFn.call(aiScope.summarizer);
+            const availability = capabilities?.available ?? 'unknown';
+
+            if (availability === 'readily') {
+                return { ready: true, status: 'readily' };
+            }
+
+            if (availability === 'after-download') {
+                const permission = hooks.requestDownloadPermission
+                    ? await hooks.requestDownloadPermission()
+                    : window.confirm('O modelo local de resumo precisa ser baixado (~50MB). Deseja continuar?');
+
+                if (!permission) {
+                    return { ready: false, status: 'download_declined' };
+                }
+
+                try {
+                    hooks.onDownloadStart?.();
+
+                    if (typeof capabilities.downloadModel === 'function') {
+                        await capabilities.downloadModel();
+                    } else if (typeof aiScope.summarizer.downloadModel === 'function') {
+                        await aiScope.summarizer.downloadModel();
+                    } else {
+                        throw new Error('downloadModel não disponível');
+                    }
+
+                    hooks.onDownloadComplete?.();
+                    return { ready: true, status: 'downloaded' };
+                } catch (downloadError) {
+                    hooks.onDownloadError?.(downloadError);
+                    return {
+                        ready: false,
+                        status: 'download_failed',
+                        error: downloadError
+                    };
+                }
+            }
+
+            return { ready: false, status: availability };
+        } catch (error) {
+            hooks.onDownloadError?.(error);
+            return {
+                ready: false,
+                status: 'capabilities_error',
+                error
+            };
+        }
+    }
+
+    async createSummarizer(options = {}, hooks = {}) {
         const availability = await this.checkAvailability();
         
         if (!availability.summarizer) {
+            throw new Error('Summarizer API não disponível. Verifique se você está usando Chrome Canary com as flags habilitadas.');
+        }
+
+        const readiness = await this.ensureSummarizerAvailability(hooks);
+        if (!readiness.ready) {
+            if (readiness.status === 'download_declined') {
+                throw new Error('summarizer_download_declined');
+            }
+            if (readiness.status === 'download_failed') {
+                const msg = readiness.error?.message ? `: ${readiness.error.message}` : '';
+                throw new Error(`summarizer_download_failed${msg}`);
+            }
+            throw new Error(`summarizer_unavailable_${readiness.status}`);
+        }
+
+        if (this.available) {
+            this.available.summarizer = true;
+        }
+
+        const aiScope = getAIScope();
+        if (!aiScope?.summarizer && typeof aiScope?.createSummarizer !== 'function') {
             throw new Error('Summarizer API não disponível. Verifique se você está usando Chrome Canary com as flags habilitadas.');
         }
 
@@ -95,7 +201,13 @@ export class ChromeAI {
         };
 
         try {
-            return await self.ai.summarizer.create(config);
+            if (aiScope.summarizer && typeof aiScope.summarizer.create === 'function') {
+                return await aiScope.summarizer.create(config);
+            }
+            if (typeof aiScope.createSummarizer === 'function') {
+                return await aiScope.createSummarizer(config);
+            }
+            throw new Error('summarizer_create_not_supported');
         } catch (error) {
             console.error('Error creating AI summarizer:', error);
             throw new Error(`Erro ao criar resumidor de IA: ${error.message}`);
@@ -134,9 +246,9 @@ export class ChromeAI {
      * @param {Object} options - Summarizer options
      * @returns {Object} Summary result
      */
-    async summarizeText(text, options = {}) {
+    async summarizeText(text, options = {}, hooks = {}) {
         try {
-            const summarizer = await this.createSummarizer(options);
+            const summarizer = await this.createSummarizer(options, hooks);
             const result = await summarizer.summarize(text);
             
             this.retryCount = 0;
@@ -166,7 +278,17 @@ export class ChromeAI {
         let fallback = 'retry';
         let retryable = true;
 
-        if (error.message.includes('not available') || error.message.includes('undefined')) {
+        if (error.message.includes('summarizer_download_declined')) {
+            errorType = 'model_download_declined';
+            message = 'Download do modelo de resumo cancelado. Gere novamente quando estiver pronto.';
+            fallback = 'user_declined';
+            retryable = false;
+        } else if (error.message.includes('summarizer_download_failed')) {
+            errorType = 'model_download_failed';
+            message = 'Falha ao baixar o modelo local de resumo. Verifique a conexão e tente novamente.';
+            fallback = 'retry';
+            retryable = true;
+        } else if (error.message.includes('not available') || error.message.includes('undefined')) {
             errorType = 'ai_not_available';
             message = 'Chrome AI não está disponível. Verifique as configurações do Chrome Canary e as flags experimentais.';
             fallback = 'setup_required';

@@ -4,12 +4,16 @@
  */
 
 import { ChromeAI } from './chrome-ai.js';
+import { ChromeAIExtended } from './chrome-ai-extended.js';
 import { DataManager } from './data-manager.js';
 import { ToastSystem } from './toast-system.js';
 
-class LexFlowApp {
+const SUMMARY_MIN_LENGTH = 1000;
+
+export class LexFlowApp {
     constructor() {
         this.chromeAI = new ChromeAI();
+        this.chromeAIExtended = new ChromeAIExtended();
         this.dataManager = new DataManager();
         this.toastSystem = new ToastSystem();
         
@@ -18,6 +22,10 @@ class LexFlowApp {
         this.currentDocument = null;
         this.queueItems = [];
         this.historyItems = [];
+        this.currentCollectorItem = null;
+        this.isGeneratingSummary = false;
+        this.summarizerModelReady = false;
+        this.summarizerDownloadDeclined = false;
         
         this.init();
     }
@@ -613,6 +621,8 @@ class LexFlowApp {
     }
 
     showItemInEditor(item) {
+        this.currentCollectorItem = item;
+        this.isGeneratingSummary = false;
         const editorForm = document.getElementById('metadata-form');
         
         // Get jurisdiction display text
@@ -646,6 +656,15 @@ class LexFlowApp {
                     <option value="en-US" ${item.language === 'en-US' ? 'selected' : ''}>English (US)</option>
                     <option value="es-ES" ${item.language === 'es-ES' ? 'selected' : ''}>Español</option>
                 </select>
+                <div class="ai-language-status">
+                    <div class="ai-language-row">
+                        <span id="language-detection-status" class="badge secondary">Aguardando detecção...</span>
+                        <button type="button" class="btn btn-secondary btn-sm" id="translate-to-pt-btn" disabled>
+                            Traduzir para PT-BR
+                        </button>
+                    </div>
+                    <small class="form-text">Detecção e tradução são processadas localmente (Chrome Built-in AI).</small>
+                </div>
             </div>
             
             <div class="form-group">
@@ -684,7 +703,17 @@ class LexFlowApp {
             <div class="form-group">
                 <label class="form-label">Texto Capturado *</label>
                 <textarea class="form-control" rows="6" id="edit-text" required>${(item.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
-                <small class="form-text">${item.text?.length || 0} caracteres</small>
+                <small class="form-text" id="edit-text-char-count">${item.text?.length || 0} caracteres</small>
+            </div>
+
+            <div class="form-group ai-summary-block hidden" id="ai-summary-block">
+                <label class="form-label">Resumo automático (IA)</label>
+                <textarea class="form-control" rows="4" id="ai-summary-text" readonly></textarea>
+                <div class="ai-language-row">
+                    <span id="ai-summary-status" class="badge secondary">Disponível para textos longos</span>
+                    <button type="button" class="btn btn-secondary btn-sm" id="generate-ai-summary-btn">Gerar resumo</button>
+                </div>
+                <small class="form-text">Resumos automáticos usam processamento local via Summarizer API.</small>
             </div>
             
             <div class="form-group">
@@ -718,6 +747,30 @@ class LexFlowApp {
             </div>
         `;
 
+        const translateButton = document.getElementById('translate-to-pt-btn');
+        if (translateButton) {
+            translateButton.addEventListener('click', () => this.translateCurrentCollectorItem());
+        }
+
+        const summarizeButton = document.getElementById('generate-ai-summary-btn');
+        if (summarizeButton) {
+            summarizeButton.addEventListener('click', () => this.generateSummaryForCurrentItem({ auto: false }));
+        }
+
+        const textArea = document.getElementById('edit-text');
+        const charCount = document.getElementById('edit-text-char-count');
+        if (textArea) {
+            textArea.addEventListener('input', () => {
+                if (charCount) {
+                    charCount.textContent = `${textArea.value.length} caracteres`;
+                }
+                if (this.currentCollectorItem) {
+                    this.currentCollectorItem.text = textArea.value;
+                }
+                this.configureSummaryUI(this.currentCollectorItem, { skipAuto: true });
+            });
+        }
+
         // Add event listeners to form action buttons
         editorForm.querySelectorAll('[data-action]').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -737,6 +790,415 @@ class LexFlowApp {
                 }
             });
         });
+
+        this.detectLanguageForCurrentItem();
+        this.configureSummaryUI(item);
+    }
+
+    normalizeLanguageCode(language) {
+        if (!language) return null;
+        const lower = language.toLowerCase();
+        if (lower === 'pt' || lower === 'pt-br') return 'pt-BR';
+        if (lower === 'en' || lower === 'en-us') return 'en-US';
+        if (lower === 'es' || lower === 'es-es') return 'es-ES';
+        return language;
+    }
+
+    formatLanguageDisplay(language) {
+        if (!language) return 'Idioma não identificado';
+        const map = {
+            'pt-BR': 'Português (Brasil)',
+            'en-US': 'Inglês (EUA)',
+            'es-ES': 'Espanhol'
+        };
+        return map[language] ?? language.toUpperCase();
+    }
+
+    async detectLanguageForCurrentItem() {
+        const item = this.currentCollectorItem;
+        const statusEl = document.getElementById('language-detection-status');
+        const translateBtn = document.getElementById('translate-to-pt-btn');
+        const languageSelect = document.getElementById('edit-language');
+
+        if (!item || !statusEl || !translateBtn) {
+            return;
+        }
+
+        const textContent = (document.getElementById('edit-text')?.value || '').trim();
+        if (textContent.length === 0) {
+            statusEl.textContent = 'Texto vazio — nada para detectar.';
+            translateBtn.disabled = true;
+            return;
+        }
+
+        statusEl.textContent = 'Detectando idioma...';
+        translateBtn.disabled = true;
+        translateBtn.dataset.sourceLanguage = '';
+
+        const result = await this.chromeAIExtended.detectLanguage(textContent, {
+            allowModelDownload: true
+        });
+
+        if (item !== this.currentCollectorItem) {
+            return;
+        }
+
+        if (!result.success) {
+            statusEl.textContent = result.message || 'Não foi possível detectar o idioma.';
+            translateBtn.disabled = true;
+            this.toastSystem.show(result.message || 'Erro ao detectar idioma.', 'warning');
+            return;
+        }
+
+        const normalized = this.normalizeLanguageCode(result.language);
+        const confidencePct = typeof result.confidence === 'number'
+            ? ` • confiança ${(result.confidence * 100).toFixed(0)}%`
+            : '';
+
+        statusEl.textContent = `Idioma detectado: ${this.formatLanguageDisplay(normalized)}${confidencePct}`;
+
+        if (languageSelect && normalized) {
+            languageSelect.value = normalized;
+        }
+
+        item.detectedLanguage = normalized;
+        item.metadata = {
+            ...(item.metadata || {}),
+            ai: {
+                ...(item.metadata?.ai || {}),
+                detectedLanguage: {
+                    code: normalized,
+                    confidence: result.confidence ?? null,
+                    timestamp: new Date().toISOString()
+                }
+            }
+        };
+
+        const needsTranslation = normalized !== 'pt-BR';
+        translateBtn.disabled = !needsTranslation;
+        translateBtn.textContent = needsTranslation ? 'Traduzir para PT-BR' : 'Conteúdo já em Português';
+        translateBtn.dataset.sourceLanguage = normalized || '';
+    }
+
+    async translateCurrentCollectorItem() {
+        const item = this.currentCollectorItem;
+        const translateBtn = document.getElementById('translate-to-pt-btn');
+        const statusEl = document.getElementById('language-detection-status');
+        const textArea = document.getElementById('edit-text');
+        const charCount = document.getElementById('edit-text-char-count');
+        const languageSelect = document.getElementById('edit-language');
+
+        if (!item || !translateBtn || !textArea) {
+            return;
+        }
+
+        const currentText = textArea.value.trim();
+        if (currentText.length === 0) {
+            this.toastSystem.show('Não há texto para traduzir.', 'warning');
+            return;
+        }
+
+        translateBtn.disabled = true;
+        translateBtn.textContent = 'Traduzindo...';
+        if (statusEl) {
+            statusEl.textContent = 'Traduzindo para Português...';
+        }
+
+        const translation = await this.chromeAIExtended.translateText(currentText, 'pt', {
+            sourceLanguage: translateBtn.dataset.sourceLanguage || undefined,
+            allowModelDownload: true
+        });
+
+        if (item !== this.currentCollectorItem) {
+            return;
+        }
+
+        if (!translation.success) {
+            translateBtn.disabled = false;
+            translateBtn.textContent = 'Traduzir para PT-BR';
+            if (statusEl) {
+                statusEl.textContent = translation.message || 'Falha ao traduzir.';
+            }
+            this.toastSystem.show(translation.message || 'Erro na tradução.', 'error');
+            return;
+        }
+
+        textArea.value = translation.result;
+        if (charCount) {
+            charCount.textContent = `${translation.result.length} caracteres`;
+        }
+
+        item.text = translation.result;
+        item.language = 'pt-BR';
+        item.metadata = {
+            ...(item.metadata || {}),
+            ai: {
+                ...(item.metadata?.ai || {}),
+                detectedLanguage: item.metadata?.ai?.detectedLanguage ?? null,
+                translation: {
+                    from: translation.from || translation.detectedLanguage || null,
+                    to: translation.to || 'pt',
+                    timestamp: new Date().toISOString()
+                }
+            }
+        };
+
+        if (item.metadata?.ai?.summary) {
+            delete item.metadata.ai.summary;
+        }
+
+        if (languageSelect) {
+            languageSelect.value = 'pt-BR';
+        }
+
+        if (statusEl) {
+            statusEl.textContent = 'Texto traduzido para Português.';
+        }
+        translateBtn.textContent = 'Conteúdo já em Português';
+        translateBtn.disabled = true;
+
+        this.toastSystem.show('Tradução concluída com sucesso (processamento local).', 'success');
+
+        if (typeof item.id !== 'undefined') {
+            this.updateCapturedContentMetadata(item.id, {
+                language: 'pt-BR',
+                text: translation.result,
+                ai: item.metadata?.ai ?? {}
+            });
+        }
+
+        this.configureSummaryUI(item);
+    }
+
+    shouldGenerateAutoSummary(text) {
+        if (typeof text !== 'string') return false;
+        return text.trim().length >= SUMMARY_MIN_LENGTH;
+    }
+
+    configureSummaryUI(item, options = {}) {
+        const { skipAuto = false } = options;
+        const summaryBlock = document.getElementById('ai-summary-block');
+        const summaryBtn = document.getElementById('generate-ai-summary-btn');
+        const summaryStatus = document.getElementById('ai-summary-status');
+        const summaryText = document.getElementById('ai-summary-text');
+        const textArea = document.getElementById('edit-text');
+
+        if (!summaryBlock || !summaryBtn || !summaryStatus || !summaryText || !textArea) {
+            return;
+        }
+
+        const content = textArea.value || '';
+        const shouldShow = this.shouldGenerateAutoSummary(content);
+
+        summaryBlock.classList.toggle('hidden', !shouldShow);
+
+        if (!shouldShow) {
+            summaryBtn.disabled = true;
+            summaryBtn.textContent = 'Gerar resumo';
+            summaryStatus.textContent = 'Texto curto — resumo automático desativado.';
+            if (!this.isGeneratingSummary) {
+                summaryText.value = '';
+            }
+            return;
+        }
+
+        summaryBtn.disabled = this.isGeneratingSummary;
+
+        const existingSummary = item?.metadata?.ai?.summary?.text;
+        if (existingSummary) {
+            summaryText.value = existingSummary;
+            summaryBtn.textContent = 'Regenerar resumo';
+            summaryBtn.disabled = this.isGeneratingSummary;
+            this.summarizerModelReady = true;
+            this.summarizerDownloadDeclined = false;
+
+            const timestamp = item.metadata.ai.summary.timestamp
+                ? new Date(item.metadata.ai.summary.timestamp).toLocaleString()
+                : null;
+            summaryStatus.textContent = timestamp
+                ? `Resumo gerado em ${timestamp}`
+                : 'Resumo automático disponível.';
+        } else {
+            summaryText.value = '';
+            summaryBtn.textContent = 'Gerar resumo';
+            summaryBtn.disabled = this.isGeneratingSummary;
+            summaryStatus.textContent = this.summarizerModelReady
+                ? 'Pronto para gerar resumo automático.'
+                : 'Clique em "Gerar resumo" para baixar o modelo de IA local (uma única vez).';
+
+            if (!skipAuto) {
+                if (this.summarizerModelReady) {
+                    this.generateSummaryForCurrentItem({ auto: true });
+                }
+            }
+        }
+    }
+
+    async generateSummaryForCurrentItem(options = {}) {
+        const { auto = false } = options;
+        const item = this.currentCollectorItem;
+        const textArea = document.getElementById('edit-text');
+        const summaryBlock = document.getElementById('ai-summary-block');
+        const summaryBtn = document.getElementById('generate-ai-summary-btn');
+        const summaryStatus = document.getElementById('ai-summary-status');
+        const summaryText = document.getElementById('ai-summary-text');
+
+        if (!item || !summaryBlock || summaryBlock.classList.contains('hidden') || !textArea) {
+            return;
+        }
+
+        const content = (textArea.value || '').trim();
+        if (!this.shouldGenerateAutoSummary(content)) {
+            return;
+        }
+
+        if (this.isGeneratingSummary) {
+            return;
+        }
+
+        if (auto && !this.summarizerModelReady) {
+            if (summaryStatus) {
+                summaryStatus.textContent = 'Clique em "Gerar resumo" para baixar o modelo local (uma única vez).';
+            }
+            if (summaryBtn) {
+                summaryBtn.disabled = false;
+                summaryBtn.textContent = 'Gerar resumo';
+            }
+            return;
+        }
+
+        this.isGeneratingSummary = true;
+
+        if (summaryBtn) {
+            summaryBtn.disabled = true;
+            summaryBtn.textContent = 'Gerando resumo...';
+        }
+
+        if (summaryStatus) {
+            summaryStatus.textContent = auto
+                ? 'Gerando resumo automaticamente...'
+                : 'Gerando resumo...';
+        }
+
+        const summarizerHooks = {
+            requestDownloadPermission: async () => {
+                if (this.summarizerModelReady) {
+                    return true;
+                }
+                const consent = window.confirm(
+                    'Para gerar resumos locais, o modelo de IA (~50 MB) precisa ser baixado. Deseja continuar?'
+                );
+                if (!consent) {
+                    this.summarizerDownloadDeclined = true;
+                }
+                return consent;
+            },
+            onDownloadStart: () => {
+                if (summaryStatus) {
+                    summaryStatus.textContent = 'Baixando modelo de resumo (pode levar alguns minutos)...';
+                }
+                if (summaryBtn) {
+                    summaryBtn.textContent = 'Baixando modelo...';
+                }
+                this.toastSystem.show('Baixando modelo local de resumo. Aguarde alguns minutos.', 'info');
+            },
+            onDownloadComplete: () => {
+                this.summarizerModelReady = true;
+                this.summarizerDownloadDeclined = false;
+                if (summaryStatus) {
+                    summaryStatus.textContent = 'Modelo baixado. Gerando resumo...';
+                }
+                if (summaryBtn) {
+                    summaryBtn.textContent = 'Gerando resumo...';
+                }
+            },
+            onDownloadError: (err) => {
+                this.toastSystem.show(
+                    `Falha ao baixar o modelo local de resumo: ${err?.message || 'erro desconhecido'}`,
+                    'error'
+                );
+                if (summaryStatus) {
+                    summaryStatus.textContent = 'Erro ao baixar o modelo de resumo.';
+                }
+            }
+        };
+
+        try {
+            const response = await this.chromeAI.summarizeText(content, {
+                length: 'medium',
+                format: 'markdown'
+            }, summarizerHooks);
+
+            if (!response?.success) {
+                if (summaryStatus) {
+                    if (response.error === 'model_download_declined') {
+                        summaryStatus.textContent = 'Download do modelo cancelado. Clique em "Gerar resumo" para tentar novamente.';
+                    } else if (response.error === 'model_download_failed') {
+                        summaryStatus.textContent = 'Falha ao baixar o modelo. Verifique sua conexão e tente novamente.';
+                    } else {
+                        summaryStatus.textContent = response.message || 'Erro ao gerar resumo.';
+                    }
+                }
+                if (summaryBtn) {
+                    summaryBtn.disabled = false;
+                    summaryBtn.textContent = 'Gerar resumo';
+                }
+                if (response.message) {
+                    this.toastSystem.show(response.message, 'error');
+                }
+                return;
+            }
+
+            const resultText = typeof response.result === 'string'
+                ? response.result
+                : response.result?.text || '';
+
+            summaryText.value = resultText;
+
+            const summaryData = {
+                text: resultText,
+                length: resultText.length,
+                timestamp: new Date().toISOString(),
+                mode: auto ? 'auto' : 'manual',
+                source: response.source || 'chrome-ai'
+            };
+
+            item.metadata = item.metadata || {};
+            item.metadata.ai = item.metadata.ai || {};
+            item.metadata.ai.summary = summaryData;
+            this.summarizerModelReady = true;
+            this.summarizerDownloadDeclined = false;
+
+            if (summaryStatus) {
+                summaryStatus.textContent = 'Resumo atualizado.';
+            }
+            if (summaryBtn) {
+                summaryBtn.disabled = false;
+                summaryBtn.textContent = 'Regenerar resumo';
+            }
+
+            if (typeof item.id !== 'undefined') {
+                this.updateCapturedContentMetadata(item.id, {
+                    ai: item.metadata.ai
+                });
+            }
+        } catch (error) {
+            console.error('Erro ao gerar resumo automático:', error);
+            if (summaryStatus) {
+                summaryStatus.textContent = 'Erro ao gerar resumo.';
+            }
+            this.toastSystem.show(
+                error?.message || 'Erro ao gerar resumo automático.',
+                'error'
+            );
+
+            if (summaryBtn) {
+                summaryBtn.disabled = false;
+                summaryBtn.textContent = 'Gerar resumo';
+            }
+        } finally {
+            this.isGeneratingSummary = false;
+        }
     }
 
     /**

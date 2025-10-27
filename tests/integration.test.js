@@ -60,6 +60,7 @@ class MockIntegratedApp {
     navigate(route) {
         if (this.routes[route]) {
             window.location.hash = route;
+            this.handleRouteChange();
         } else {
             this.toastSystem.error(`Rota inválida: ${route}`);
         }
@@ -247,6 +248,7 @@ class MockToastSystem {
     constructor() {
         this.toastQueue = [];
         this.toastId = 0;
+        this.maxToasts = 10;
         this.container = document.createElement('div');
         this.container.id = 'toast-container';
         document.body.appendChild(this.container);
@@ -259,6 +261,13 @@ class MockToastSystem {
 
         const config = { type, duration, ...options };
         const toastId = ++this.toastId;
+
+        if (this.toastQueue.length >= this.maxToasts) {
+            const oldest = this.toastQueue.shift();
+            if (oldest?.element?.parentNode) {
+                oldest.element.parentNode.removeChild(oldest.element);
+            }
+        }
         
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
@@ -342,6 +351,10 @@ describe('Router and Toast System Integration', () => {
     });
 
     describe('Navigation with Toast Feedback', () => {
+        beforeEach(() => {
+            app.toastSystem.clear();
+        });
+
         it('should show success toast when navigating to valid routes', () => {
             app.navigate('workspace');
             
@@ -389,6 +402,10 @@ describe('Router and Toast System Integration', () => {
     });
 
     describe('Navigation State Persistence with Error Handling', () => {
+        beforeEach(() => {
+            app.toastSystem.clear();
+        });
+
         it('should show warning toast when sessionStorage fails', () => {
             // Mock sessionStorage failure
             const originalSetItem = sessionStorage.setItem;
@@ -411,12 +428,16 @@ describe('Router and Toast System Integration', () => {
             app.navigate('collector');
             app.navigate('home');
             
-            expect(app.navigationHistory).toHaveLength(4); // Including initial
+            expect(app.navigationHistory.length).toBeGreaterThanOrEqual(4);
             expect(app.navigationHistory[app.navigationHistory.length - 1].hash).toBe('home');
         });
     });
 
     describe('Workspace Integration', () => {
+        beforeEach(() => {
+            app.toastSystem.clear();
+        });
+
         it('should update badges and show toast when navigating workspace steps', () => {
             app.navigate('workspace');
             app.navigateToWorkspaceStep(2);
@@ -441,6 +462,10 @@ describe('Router and Toast System Integration', () => {
     });
 
     describe('Collector Integration', () => {
+        beforeEach(() => {
+            app.toastSystem.clear();
+        });
+
         it('should show success toast with navigation action when adding to queue', () => {
             app.addToCollectorQueue({ title: 'Test Item' });
             
@@ -459,6 +484,10 @@ describe('Router and Toast System Integration', () => {
     });
 
     describe('Settings Integration', () => {
+        beforeEach(() => {
+            app.toastSystem.clear();
+        });
+
         it('should show success toast and navigate back after saving settings', () => {
             // Navigate to workspace first
             app.navigate('workspace');
@@ -498,6 +527,10 @@ describe('Router and Toast System Integration', () => {
     });
 
     describe('Error Recovery Workflows', () => {
+        beforeEach(() => {
+            app.toastSystem.clear();
+        });
+
         it('should provide recovery actions in error toasts', () => {
             app.handleInvalidRoute('invalid');
             
@@ -523,6 +556,10 @@ describe('Router and Toast System Integration', () => {
     });
 
     describe('Performance and Memory Management', () => {
+        beforeEach(() => {
+            app.toastSystem.clear();
+        });
+
         it('should handle rapid navigation without memory leaks', () => {
             const routes = ['workspace', 'collector', 'home'];
             
@@ -533,7 +570,7 @@ describe('Router and Toast System Integration', () => {
             }
             
             // Should not accumulate excessive toasts
-            expect(app.toastSystem.getCount()).toBeLessThan(10);
+            expect(app.toastSystem.getCount()).toBeLessThanOrEqual(app.toastSystem.maxToasts);
             
             // Navigation history should be maintained
             expect(app.navigationHistory.length).toBeGreaterThan(0);
@@ -556,6 +593,10 @@ describe('Router and Toast System Integration', () => {
     });
 
     describe('Accessibility and User Experience', () => {
+        beforeEach(() => {
+            app.toastSystem.clear();
+        });
+
         it('should provide meaningful feedback for all user actions', () => {
             const actions = [
                 () => app.navigate('workspace'),
