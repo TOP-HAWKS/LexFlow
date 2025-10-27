@@ -1,0 +1,15 @@
+name = "lexflow-corpus"
+main = "src/index.js"
+compatibility_date = "2024-10-26"
+
+[vars]
+GITHUB_OWNER = "viniciusvollrath"
+GITHUB_REPO  = "legal-corpus"
+DEFAULT_BRANCH = "main"
+
+# Habilite CORS simples
+[unsafe]
+bindings = []
+
+# Secrets (defina via CLI)
+# - GITHUB_TOKEN

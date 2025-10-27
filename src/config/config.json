@@ -1,0 +1,39 @@
+{
+  "app": {
+    "name": "LexFlow",
+    "version": "1.0.0",
+    "description": "Legal AI Assistant with Chrome Built-in AI"
+  },
+  "ai": {
+    "provider": "chrome-builtin",
+    "models": {
+      "prompt": "gemini-nano",
+      "summarizer": "gemini-nano"
+    },
+    "fallback": {
+      "enabled": true,
+      "mode": "demo"
+    }
+  },
+  "corpus": {
+    "baseUrls": {
+      "br": "https://raw.githubusercontent.com/org/legal-corpus-br/main",
+      "us": "https://raw.githubusercontent.com/org/legal-corpus-us/main",
+      "es": "https://raw.githubusercontent.com/org/legal-corpus-es/main"
+    },
+    "fallbackUrl": "https://raw.githubusercontent.com/org/legal-corpus/main"
+  },
+  "storage": {
+    "type": "localStorage",
+    "keys": {
+      "userData": "lexflow-user-data",
+      "history": "lexflow-history",
+      "settings": "lexflow-settings"
+    }
+  },
+  "ui": {
+    "defaultLanguage": "en-US",
+    "theme": "default",
+    "animations": true
+  }
+}

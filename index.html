@@ -1,14 +1,17 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en-US">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LexFlow - Assistente Jurídico com IA</title>
-    <meta name="description" content="Assistente jurídico inteligente com IA integrada do Chrome (Gemini Nano) para análise de textos legais">
-    <meta name="keywords" content="direito, jurídico, IA, Gemini Nano, análise legal, advogado">
+    <title>LexFlow - Legal AI Assistant</title>
+    <meta name="description"
+        content="Intelligent legal assistant with integrated Chrome AI (Gemini Nano) for legal text analysis">
+    <meta name="keywords" content="legal, law, AI, Gemini Nano, legal analysis, lawyer">
     <link rel="icon" href="assets/lexflow.ico" type="image/x-icon">
     <link rel="stylesheet" href="src/styles/main.css">
 </head>
+
 <body>
     <div class="app-container">
         <!-- Header -->
@@ -17,18 +20,19 @@
                 ⚖️ LexFlow
             </div>
             <div class="user-info">
-                <span>👤 <span id="user-name">Usuário</span></span>
+                <span>👤 <span id="user-name">User</span></span>
                 <span>|</span>
-                <span>📍 <span id="user-location">Localização</span></span>
+                <span>📍 <span id="user-location">Location</span></span>
+                <button class="settings-btn" id="settings-btn" title="Settings">⚙️</button>
             </div>
         </header>
 
         <!-- Navigation -->
         <nav class="main-nav">
-            <button class="nav-tab active" data-view="home">🏠 Início</button>
-            <button class="nav-tab" data-view="workspace">📚 Workspace Jurídico</button>
-            <button class="nav-tab" data-view="collector">📝 Coletor & Curadoria</button>
-            <button class="nav-tab" data-view="history">📊 Histórico & Analytics</button>
+            <button class="nav-tab active" data-view="home">🏠 Home</button>
+            <button class="nav-tab" data-view="workspace">📚 Legal Workspace</button>
+            <button class="nav-tab" data-view="collector">📝 Collector & Curation</button>
+            <button class="nav-tab" data-view="history">📊 History & Analytics</button>
         </nav>
 
         <!-- Content -->
@@ -36,21 +40,21 @@
             <!-- Home View -->
             <div id="home-view" class="view active">
                 <div class="welcome-section">
-                    <h1 class="welcome-title">Bem-vindo ao LexFlow</h1>
-                    <p class="welcome-subtitle">Seu assistente jurídico inteligente com IA integrada</p>
-                    
+                    <h1 class="welcome-title">Welcome to LexFlow</h1>
+                    <p class="welcome-subtitle">Your intelligent legal assistant with integrated AI</p>
+
                     <div class="stats-grid">
                         <div class="stat-card">
                             <div class="stat-number" id="stat-analyses">0</div>
-                            <div class="stat-label">Análises Realizadas</div>
+                            <div class="stat-label">Analyses Performed</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-number" id="stat-documents">0</div>
-                            <div class="stat-label">Documentos Curados</div>
+                            <div class="stat-label">Curated Documents</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-number" id="stat-time">0h</div>
-                            <div class="stat-label">Tempo Economizado</div>
+                            <div class="stat-label">Time Saved</div>
                         </div>
                     </div>
                 </div>
@@ -58,28 +62,25 @@
                 <div class="feature-grid">
                     <div class="feature-card" data-navigate="workspace">
                         <div class="feature-icon">🔍</div>
-                        <div class="feature-title">Pesquisa & Análise Legal</div>
+                        <div class="feature-title">Legal Research and Analysis</div>
                         <div class="feature-description">
-                            Pesquise leis por jurisdição, selecione artigos relevantes e gere análises jurídicas 
-                            personalizadas com IA. Ideal para pesquisa doutrinária e fundamentação de peças.
+                            Search laws by jurisdiction, select relevant articles, and generate personalized legal analyses with AI. Ideal for doctrinal research and documenting legal arguments.
                         </div>
                     </div>
-                    
+
                     <div class="feature-card" data-navigate="collector">
                         <div class="feature-icon">📋</div>
-                        <div class="feature-title">Curadoria de Conteúdo</div>
+                        <div class="feature-title">Content Curation</div>
                         <div class="feature-description">
-                            Capture conteúdo jurídico da web, organize com metadados e gere documentos 
-                            estruturados para sua base de conhecimento ou repositório público.
+                            Capture legal content from the web, organize it with metadata, and generate structured documents for your knowledge base or public repository.
                         </div>
                     </div>
-                    
+
                     <div class="feature-card" data-navigate="history">
                         <div class="feature-icon">📈</div>
-                        <div class="feature-title">Analytics & Histórico</div>
+                        <div class="feature-title">Analytics & History</div>
                         <div class="feature-description">
-                            Acompanhe suas análises, reutilize prompts eficazes e monitore sua 
-                            produtividade jurídica com métricas detalhadas.
+                            Track your analytics, reuse effective prompts, and monitor your legal productivity with detailed metrics.
                         </div>
                     </div>
                 </div>
@@ -91,28 +92,28 @@
                     <!-- Sidebar -->
                     <div class="sidebar">
                         <div class="section-title">
-                            🌍 Configuração de Jurisdição
+                            🌍 Jurisdiction Configuration
                         </div>
-                        
+
                         <div class="jurisdiction-selector">
                             <div class="form-group">
-                                <label class="form-label">País</label>
+                                <label class="form-label">Country</label>
                                 <select class="form-control" id="country-select">
-                                    <option value="br" selected>Brasil</option>
-                                    <option value="us">Estados Unidos</option>
-                                    <option value="es">Espanha</option>
+                                    <option value="us" selected>US</option>
+                                    <option value="br">Brazil</option>
+                                    <option value="es">Spain</option>
                                 </select>
                             </div>
-                            
+
                             <div class="form-group">
-                                <label class="form-label">Estado</label>
+                                <label class="form-label">State</label>
                                 <select class="form-control" id="state-select">
                                     <option value="rs" selected>Rio Grande do Sul</option>
                                     <option value="sp">São Paulo</option>
                                     <option value="rj">Rio de Janeiro</option>
                                 </select>
                             </div>
-                            
+
                             <div class="form-group">
                                 <label class="form-label">Cidade</label>
                                 <select class="form-control" id="city-select">
@@ -124,36 +125,37 @@
                         </div>
 
                         <div class="section-title">
-                            📚 Documentos Disponíveis
+                            📚 Available Documents
                         </div>
-                        
+
                         <div class="document-list" id="document-list">
                             <!-- Documents will be populated here -->
                         </div>
 
                         <div class="form-group" style="margin-top: 1rem;">
-                            <label class="form-label">🔍 Buscar Artigos</label>
-                            <input type="text" class="form-control" id="search-input" placeholder="Ex: direito do consumidor">
+                            <label class="form-label">🔍 Search Articles</label>
+                            <input type="text" class="form-control" id="search-input"
+                                placeholder="Ex: consumer law">
                         </div>
                     </div>
 
                     <!-- Main Panel -->
                     <div class="main-panel">
                         <div class="section-title">
-                            📖 Artigos Selecionados
+                            📖 Selected Articles
                         </div>
 
                         <div class="articles-container" id="articles-container">
                             <p style="color: #7f8c8d; text-align: center; padding: 2rem;">
-                                Selecione um documento à esquerda para visualizar os artigos
+                                Select a document on the left to view the articles
                             </p>
                         </div>
 
                         <div class="selected-context" id="selected-context" style="display: none;">
                             <div class="section-title">
-                                ✅ Contexto Selecionado
+                                ✅ Selected Context
                                 <button class="clear-all-btn" id="clear-all-articles" title="Limpar todos os artigos">
-                                    🗑️ Limpar Todos
+                                    🗑️ Clear All
                                 </button>
                             </div>
                             <div id="context-items"></div>
@@ -163,50 +165,52 @@
                             <div class="section-title">
                                 🤖 Prompt Studio
                             </div>
-                            
+
                             <div class="preset-buttons">
                                 <button class="preset-btn active" data-preset="resumo">
-                                    📝 Resumo Executivo
+                                    📝 Executive Summary
                                 </button>
                                 <button class="preset-btn" data-preset="analise">
-                                    🔍 Análise Jurídica
+                                    🔍 Legal Analysis
                                 </button>
                                 <button class="preset-btn" data-preset="comparacao">
-                                    ⚖️ Comparação Legal
+                                    ⚖️ Legal Comparison
                                 </button>
                                 <button class="preset-btn" data-preset="clausulas">
-                                    📋 Geração de Cláusulas
+                                    📋 Clause Generation
                                 </button>
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">Prompt Personalizado</label>
-                                <textarea class="form-control" rows="3" id="custom-prompt" 
-                                          placeholder="Descreva o que você gostaria que a IA analise...">Faça um resumo executivo dos artigos selecionados, destacando os principais direitos e obrigações, com linguagem acessível para apresentação ao cliente.</textarea>
+                                <label class="form-label">Custom Prompt</label>
+                                <textarea class="form-control" rows="3" id="custom-prompt"
+                                    placeholder="Descreva o que você gostaria que a IA analise...">Create an executive summary of the selected articles, highlighting the main rights and obligations, using accessible language for presentation to the client.</textarea>
                             </div>
 
                             <button class="btn btn-primary" id="execute-ai-btn" style="width: 100%; margin-top: 1rem;">
-                                🚀 Executar Análise com IA
+                                🚀 Perform Analysis with AI
                             </button>
 
                             <div class="ai-output" id="ai-output" style="display: none;">
                                 <div class="ai-thinking" id="ai-thinking">
                                     <div class="spinner"></div>
-                                    Analisando com IA...
+                                    Analyzing with AI...
                                 </div>
                                 <div id="ai-result" style="display: none;">
                                     <div id="result-content"></div>
                                     <div class="result-actions">
                                         <div class="feedback-buttons">
-                                            <button class="feedback-btn" data-feedback="positive" title="Resultado útil">
+                                            <button class="feedback-btn" data-feedback="positive"
+                                                title="Useful result">
                                                 👍
                                             </button>
-                                            <button class="feedback-btn" data-feedback="negative" title="Resultado não útil">
+                                            <button class="feedback-btn" data-feedback="negative"
+                                                title="Non-useful result">
                                                 👎
                                             </button>
                                         </div>
-                                        <button class="copy-btn" id="copy-result-btn" title="Copiar resultado">
-                                            📋 Copiar
+                                        <button class="copy-btn" id="copy-result-btn" title="Copy result">
+                                            📋 Copy
                                         </button>
                                     </div>
                                 </div>
@@ -219,28 +223,28 @@
             <!-- Collector View -->
             <div id="collector-view" class="view">
                 <div class="section-title">
-                    📝 Coletor & Curadoria de Conteúdo
+                    📝 Content Collection and Curation
                 </div>
-                
+
                 <div class="collector-grid">
                     <div>
-                        <div class="section-title">📥 Fila de Captura (<span id="queue-count">0</span> itens)</div>
+                        <div class="section-title">📥 Capture Queue (<span id="queue-count">0</span> items)</div>
                         <div id="queue-items">
                             <p style="color: #7f8c8d; text-align: center; padding: 2rem;">
-                                Nenhum item na fila. Use o botão "Adicionar Conteúdo" para começar.
+                                No items in queue. Use the "Add Content" button to get started.
                             </p>
                         </div>
                         <button class="btn btn-primary" id="add-sample-content" style="margin-top: 1rem;">
-                            ➕ Adicionar Conteúdo de Exemplo
+                            ➕ Add Sample Content
                         </button>
                     </div>
 
                     <div class="editor-panel">
-                        <div class="section-title">✏️ Editor de Metadados</div>
-                        
+                        <div class="section-title">✏️ Metadata Editor</div>
+
                         <div class="metadata-form" id="metadata-form">
                             <p style="color: #7f8c8d; text-align: center; padding: 2rem;">
-                                Selecione um item da fila para editar
+                                Select an item from the queue to edit
                             </p>
                         </div>
                     </div>
@@ -250,39 +254,86 @@
             <!-- History View -->
             <div id="history-view" class="view">
                 <div class="section-title">
-                    📊 Histórico & Analytics
+                    📊 History & Analytics
                 </div>
-                
+
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-number" id="history-analyses">0</div>
-                        <div class="stat-label">Análises com IA</div>
+                        <div class="stat-number" id="history-analyses">{{n}}</div>
+                        <div class="stat-label">AI Analytics</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number" id="history-documents">0</div>
-                        <div class="stat-label">Documentos Curados</div>
+                        <div class="stat-number" id="history-documents">{{n}}</div>
+                        <div class="stat-label">Generated documents</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number" id="history-articles">0</div>
-                        <div class="stat-label">Artigos Consultados</div>
+                        <div class="stat-number" id="history-articles">{{n}}</div>
+                        <div class="stat-label">Consulted Articles</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">89%</div>
-                        <div class="stat-label">Precisão da IA</div>
+                        <div class="stat-number">{{n}}</div>
+                        <div class="stat-label">AI Accuracy</div>
                     </div>
                 </div>
 
                 <div class="section-title" style="margin-top: 2rem;">
-                    🕒 Análises Recentes
+                    🕒 Recent Analysis
                 </div>
 
                 <div id="history-items">
                     <p style="color: #7f8c8d; text-align: center; padding: 2rem;">
-                        Nenhuma análise realizada ainda. Use o Workspace Jurídico para começar.
+                        No analysis performed yet. Use the Legal Workspace to get started.
                     </p>
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>⚙️ Settings</h3>
+                <button class="modal-close" id="settings-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Language</label>
+                    <select class="form-control" id="settings-language">
+                        <option value="en-US">English (US)</option>
+                        <option value="pt-BR">Português (Brasil)</option>
+                        <option value="es-ES">Español</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Country</label>
+                    <input type="text" class="form-control" id="settings-country" placeholder="e.g., United States">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">State/Province</label>
+                    <input type="text" class="form-control" id="settings-state" placeholder="e.g., California">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">City</label>
+                    <input type="text" class="form-control" id="settings-city" placeholder="e.g., San Francisco">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Serverless Endpoint (Worker URL)</label>
+                    <input type="url" class="form-control" id="settings-endpoint"
+                        value="https://lexflow-corpus.webmaster-1d0.workers.dev"
+                        placeholder="https://your-worker.workers.dev">
+                    <small class="form-text">Cloudflare Worker endpoint for corpus submissions</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="settings-cancel">Cancel</button>
+                <button class="btn btn-primary" id="settings-save">Save</button>
+            </div>
+        </div>
     </div>
 
     <!-- Toast Container -->
@@ -291,4 +342,5 @@
     <!-- Scripts -->
     <script type="module" src="src/js/app.js"></script>
 </body>
+
 </html>

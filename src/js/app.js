@@ -6,6 +6,11 @@
 import { ChromeAI } from './chrome-ai.js';
 import { DataManager } from './data-manager.js';
 import { ToastSystem } from './toast-system.js';
+import { initializeConfig } from '../util/config-loader.js';
+import { resolveCorpusBaseUrl, loadDocumentsFromCorpus } from '../util/corpus-resolver.js';
+import { setSetting, getSetting, setSettings, getAllSettings } from '../util/settings.js';
+import { submitToCorpusPR, buildMarkdownFromForm } from '../util/worker-api.js';
+import { showToast } from '../util/toast.js';
 
 class LexFlowApp {
     constructor() {
@@ -24,8 +29,37 @@ class LexFlowApp {
 
     async init() {
         try {
+            // Load configuration first
+            let appConfig;
+            try {
+                appConfig = await initializeConfig();
+                await setSetting('appConfig', appConfig);
+                console.log('[LexFlow] Configuration loaded successfully');
+            } catch (configError) {
+                console.warn('[LexFlow] Configuration loading failed, using defaults:', configError);
+                // Set minimal default configuration
+                appConfig = {
+                    app: { name: 'LexFlow', version: '1.0.0' },
+                    ui: { defaultLanguage: 'en-US' },
+                    corpus: { fallbackUrl: 'https://raw.githubusercontent.com/org/legal-corpus/main' }
+                };
+                await setSetting('appConfig', appConfig);
+            }
+            
+            // Set serverless endpoint
+            await setSetting('serverlessEndpoint', 'https://lexflow-corpus.webmaster-1d0.workers.dev');
+            
             // Initialize data
             await this.dataManager.init();
+            
+            // Resolve corpus URL (with fallback handling)
+            let corpusBaseUrl;
+            try {
+                corpusBaseUrl = await resolveCorpusBaseUrl();
+            } catch (corpusError) {
+                console.warn('[LexFlow] Corpus URL resolution failed:', corpusError);
+                corpusBaseUrl = 'https://raw.githubusercontent.com/org/legal-corpus/main';
+            }
             
             // Load saved data
             await this.loadUserData();
@@ -33,16 +67,27 @@ class LexFlowApp {
             // Setup event listeners
             this.setupEventListeners();
             
-            // Initialize documents
-            this.initializeDocuments();
+            // Initialize documents from corpus
+            await this.initializeDocumentsFromCorpus(corpusBaseUrl);
             
             // Update UI
             this.updateStats();
             
-            console.log('LexFlow initialized successfully');
+            console.log('[LexFlow] Application initialized successfully');
         } catch (error) {
-            console.error('Error initializing LexFlow:', error);
-            this.toastSystem.show('Erro ao inicializar aplicação', 'error');
+            console.error('[LexFlow] Critical initialization error:', error);
+            showToast('Application initialization failed. Some features may not work properly.', 'error');
+            
+            // Try to continue with minimal functionality
+            try {
+                await this.dataManager.init();
+                this.setupEventListeners();
+                this.initializeDocuments(); // Use fallback documents
+                this.updateStats();
+            } catch (fallbackError) {
+                console.error('[LexFlow] Fallback initialization also failed:', fallbackError);
+                showToast('Critical error: Application could not start', 'error');
+            }
         }
     }
 
@@ -143,16 +188,46 @@ class LexFlowApp {
         document.getElementById('add-sample-content')?.addEventListener('click', () => {
             this.addSampleContent();
         });
+
+        // Settings modal
+        document.getElementById('settings-btn')?.addEventListener('click', () => {
+            this.openSettingsModal();
+        });
+        document.getElementById('settings-close')?.addEventListener('click', () => {
+            this.closeSettingsModal();
+        });
+        document.getElementById('settings-cancel')?.addEventListener('click', () => {
+            this.closeSettingsModal();
+        });
+        document.getElementById('settings-save')?.addEventListener('click', () => {
+            this.saveSettings();
+        });
+    }
+
+    async initializeDocumentsFromCorpus(corpusBaseUrl) {
+        try {
+            const documents = await loadDocumentsFromCorpus(corpusBaseUrl);
+            this.renderDocuments(documents);
+        } catch (error) {
+            console.error('Error loading documents from corpus:', error);
+            // Fallback to local documents
+            this.initializeDocuments();
+        }
     }
 
     initializeDocuments() {
         const documentList = document.getElementById('document-list');
         const documents = this.dataManager.getDocuments();
+        this.renderDocuments(documents);
+    }
+
+    renderDocuments(documents) {
+        const documentList = document.getElementById('document-list');
         
         documentList.innerHTML = documents.map(doc => `
             <div class="document-item" data-doc-id="${doc.id}">
                 <div class="document-title">${doc.title}</div>
-                <div class="document-meta">${doc.scope} • ${doc.articles} artigos</div>
+                <div class="document-meta">${doc.scope} • ${doc.articles} articles</div>
             </div>
         `).join('');
 
@@ -181,10 +256,10 @@ class LexFlowApp {
         
         // Find and activate the correct tab
         const tabTexts = {
-            'home': 'Início',
-            'workspace': 'Workspace',
-            'collector': 'Coletor',
-            'history': 'Histórico'
+            'home': 'Home',
+            'workspace': 'Legal Workspace',
+            'collector': 'Collector',
+            'history': 'History'
         };
         
         document.querySelectorAll('.nav-tab').forEach(tab => {
@@ -761,31 +836,104 @@ class LexFlowApp {
             await this.updateCapturedContentMetadata(itemId, updates);
         } catch (error) {
             console.error('Error saving metadata:', error);
-            this.toastSystem.show('Erro ao salvar metadados', 'error');
+            showToast('Error saving metadata', 'error');
         }
     }
 
-    processItem(itemId) {
-        // Save metadata first
-        this.saveItemMetadata(itemId).then(() => {
-            this.toastSystem.show('Item processado e Markdown gerado!', 'success');
+    async processItem(itemId) {
+        try {
+            // Save metadata first
+            await this.saveItemMetadata(itemId);
+            
+            // Get item data
+            const item = this.queueItems.find(item => item.id === itemId);
+            if (!item) {
+                throw new Error('Item not found');
+            }
+            
+            // Build form data for markdown generation
+            const formData = {
+                title: document.getElementById('edit-title').value,
+                jurisdiction: this.formatJurisdictionForSubmission(item.jurisdiction),
+                language: document.getElementById('edit-language').value,
+                sourceUrl: document.getElementById('edit-source-url').value,
+                versionDate: document.getElementById('edit-version-date').value,
+                docType: document.getElementById('edit-category').value,
+                text: document.getElementById('edit-text').value
+            };
+            
+            // Generate markdown
+            const markdown = buildMarkdownFromForm(formData);
+            
+            showToast('Item processed and Markdown generated!', 'success');
             
             // Update status
-            this.updateCapturedContentMetadata(itemId, { 
+            await this.updateCapturedContentMetadata(itemId, { 
                 status: 'processed',
-                processedAt: new Date().toISOString()
+                processedAt: new Date().toISOString(),
+                markdown: markdown
             });
-        });
+            
+        } catch (error) {
+            console.error('Error processing item:', error);
+            showToast('Error processing item', 'error');
+        }
     }
 
-    generatePR(itemId) {
-        this.toastSystem.show('Pull Request criado no repositório público!', 'success');
-        
-        // Update status
-        this.updateCapturedContentMetadata(itemId, { 
-            status: 'published',
-            publishedAt: new Date().toISOString()
-        });
+    async generatePR(itemId) {
+        try {
+            // Get item data
+            const item = this.queueItems.find(item => item.id === itemId);
+            if (!item) {
+                throw new Error('Item not found');
+            }
+            
+            // Build form data
+            const formData = {
+                title: document.getElementById('edit-title').value,
+                jurisdiction: this.formatJurisdictionForSubmission(item.jurisdiction),
+                language: document.getElementById('edit-language').value,
+                sourceUrl: document.getElementById('edit-source-url').value,
+                versionDate: document.getElementById('edit-version-date').value,
+                docType: document.getElementById('edit-category').value,
+                text: document.getElementById('edit-text').value
+            };
+            
+            // Generate markdown
+            const markdown = buildMarkdownFromForm(formData);
+            
+            // Submit to corpus
+            const result = await submitToCorpusPR({
+                title: `[LexFlow] ${formData.title}`,
+                markdown,
+                metadata: {
+                    jurisdiction: formData.jurisdiction,
+                    language: formData.language || 'en-US',
+                    doc_type: formData.docType || 'general',
+                    file_slug: this.slugify(formData.title),
+                    version_date: formData.versionDate,
+                    source_url: formData.sourceUrl
+                }
+            });
+            
+            showToast('✅ Corpus submission successful', 'success');
+            
+            // Show PR link if available
+            if (result?.url) {
+                this.renderPRLink(result.url);
+            }
+            
+            // Update status
+            await this.updateCapturedContentMetadata(itemId, { 
+                status: 'published',
+                publishedAt: new Date().toISOString(),
+                prUrl: result?.url
+            });
+            
+        } catch (error) {
+            console.error('Corpus submission failed:', error);
+            showToast('Corpus submission failed. Please check your configuration.', 'error');
+        }
     }
 
     updateHistoryView() {
@@ -907,7 +1055,7 @@ class LexFlowApp {
                     }
                     
                     if (response?.success) {
-                        this.toastSystem.show('Metadados atualizados', 'success');
+                        showToast('Metadata updated', 'success');
                         // Reload queue
                         this.loadUserData();
                     } else {
@@ -930,11 +1078,11 @@ class LexFlowApp {
                 this.queueItems[itemIndex] = { ...this.queueItems[itemIndex], ...updates };
                 await this.dataManager.saveQueueItems(this.queueItems);
                 this.updateCollectorView();
-                this.toastSystem.show('Metadados atualizados', 'success');
+                showToast('Metadata updated', 'success');
             }
         } catch (error) {
             console.error('Error updating local metadata:', error);
-            this.toastSystem.show('Erro ao atualizar metadados', 'error');
+            showToast('Error updating metadata', 'error');
         }
     }
 
@@ -952,6 +1100,123 @@ class LexFlowApp {
         if (jurisdiction.city) parts.push(jurisdiction.city);
         
         return parts.join(' - ');
+    }
+
+    /**
+     * Format jurisdiction for submission
+     * @param {Object} jurisdiction - Jurisdiction object
+     * @returns {string} Formatted jurisdiction for API
+     */
+    formatJurisdictionForSubmission(jurisdiction) {
+        if (!jurisdiction) return 'unknown';
+        
+        const parts = [];
+        if (jurisdiction.country) parts.push(jurisdiction.country.toLowerCase());
+        if (jurisdiction.state) parts.push(jurisdiction.state.toLowerCase());
+        if (jurisdiction.city) parts.push(jurisdiction.city.toLowerCase());
+        
+        return parts.join('-') || 'unknown';
+    }
+
+    /**
+     * Create URL-friendly slug from title
+     * @param {string} title - Title to slugify
+     * @returns {string} URL-friendly slug
+     */
+    slugify(title) {
+        return title
+            .toLowerCase()
+            .replace(/[^\w\s-]/g, '')
+            .replace(/[\s_-]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+    }
+
+    /**
+     * Render PR link in UI
+     * @param {string} prUrl - Pull request URL
+     */
+    renderPRLink(prUrl) {
+        const linkContainer = document.createElement('div');
+        linkContainer.className = 'pr-link-container';
+        linkContainer.innerHTML = `
+            <div style="margin-top: 1rem; padding: 12px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px;">
+                <strong>Pull Request Created:</strong><br>
+                <a href="${prUrl}" target="_blank" style="color: #0ea5e9; text-decoration: none;">
+                    ${prUrl}
+                </a>
+            </div>
+        `;
+        
+        // Add to form actions area
+        const formActions = document.querySelector('.form-actions');
+        if (formActions) {
+            formActions.appendChild(linkContainer);
+        }
+    }
+
+    /**
+     * Open settings modal
+     */
+    async openSettingsModal() {
+        const modal = document.getElementById('settings-modal');
+        
+        // Load current settings
+        const settings = await getAllSettings();
+        
+        document.getElementById('settings-language').value = settings.language || 'en-US';
+        document.getElementById('settings-country').value = settings.country || '';
+        document.getElementById('settings-state').value = settings.state || '';
+        document.getElementById('settings-city').value = settings.city || '';
+        document.getElementById('settings-endpoint').value = settings.serverlessEndpoint || 'https://lexflow-corpus.webmaster-1d0.workers.dev';
+        
+        modal.style.display = 'flex';
+    }
+
+    /**
+     * Close settings modal
+     */
+    closeSettingsModal() {
+        const modal = document.getElementById('settings-modal');
+        modal.style.display = 'none';
+    }
+
+    /**
+     * Save settings from modal
+     */
+    async saveSettings() {
+        try {
+            const settings = {
+                language: document.getElementById('settings-language').value,
+                country: document.getElementById('settings-country').value,
+                state: document.getElementById('settings-state').value,
+                city: document.getElementById('settings-city').value,
+                serverlessEndpoint: document.getElementById('settings-endpoint').value
+            };
+
+            await setSettings(settings);
+            
+            // Update user location display
+            const location = [settings.city, settings.state, settings.country]
+                .filter(Boolean)
+                .join(', ');
+            if (location) {
+                document.getElementById('user-location').textContent = location;
+            }
+
+            showToast('Settings saved successfully', 'success');
+            this.closeSettingsModal();
+
+            // Re-resolve corpus URL if language changed
+            try {
+                await resolveCorpusBaseUrl();
+            } catch (error) {
+                console.warn('Could not re-resolve corpus URL:', error);
+            }
+
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            showToast('Error saving settings', 'error');
+        }
     }
 }
 

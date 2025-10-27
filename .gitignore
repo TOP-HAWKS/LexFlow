@@ -21,3 +21,4 @@ Homestead.yaml
 Thumbs.db
 /.docker/pgdata
 /.kiro
+/cloudflare/.wrangler
