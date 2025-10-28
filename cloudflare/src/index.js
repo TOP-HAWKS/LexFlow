@@ -41,8 +41,17 @@ export default {
 
       const fileSlug = metadata.file_slug || slugify(title);
       const lang = metadata.language || "en-US";
-      const country = "US";
-      const dir = `${lang}/${country}/federal/constitution`;
+      
+      // Map language to country code
+      const languageToCountry = {
+        'pt-BR': 'BR',
+        'en-US': 'US', 
+        'es-ES': 'ES'
+      };
+      
+      const country = languageToCountry[lang] || 'US';
+      const level = metadata.jurisdiction?.includes('/') ? metadata.jurisdiction.split('/')[1].toLowerCase() : 'federal';
+      const dir = `${lang}/${country}/${level}/constitution`;
       const path = `${dir}/${fileSlug}.md`;
 
       // 1️⃣ Get base branch SHA

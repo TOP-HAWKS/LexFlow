@@ -7,10 +7,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { setSetting, getSetting } from '../src/db.js';
+import { setSetting, getSetting } from '../src/util/settings.js';
 
-// Mock the database module
-vi.mock('../src/db.js', () => ({
+// Mock the settings module
+vi.mock('../src/util/settings.js', () => ({
     setSetting: vi.fn(),
     getSetting: vi.fn()
 }));

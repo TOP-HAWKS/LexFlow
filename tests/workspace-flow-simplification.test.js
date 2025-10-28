@@ -5,11 +5,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { setSetting, getSetting } from '../src/db.js';
+import { setSetting, getSetting } from '../src/util/settings.js';
 import { DEFAULT_CONFIG, getDefaultBaseUrl } from '../src/config/defaults.js';
 
-// Mock the database module
-vi.mock('../src/db.js', () => ({
+// Mock the settings module
+vi.mock('../src/util/settings.js', () => ({
     setSetting: vi.fn(),
     getSetting: vi.fn()
 }));
@@ -162,12 +162,12 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
         mockToastSystem = {
             toasts: [],
             show(message, type = 'info', duration = 3000) {
-                const toast = { 
+                const toast = {
                     id: Date.now() + Math.random(),
-                    message, 
-                    type, 
-                    duration, 
-                    timestamp: Date.now() 
+                    message,
+                    type,
+                    duration,
+                    timestamp: Date.now()
                 };
                 this.toasts.push(toast);
                 return toast.id;
@@ -227,7 +227,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
                 const banner = document.getElementById('configuration-banner');
                 if (banner) {
                     banner.classList.remove('hidden');
-                    
+
                     // Update message based on missing fields
                     const messageEl = banner.querySelector('.banner-message');
                     if (messageEl) {
@@ -244,7 +244,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
                         messageEl.innerHTML = `<strong>Configuração incompleta</strong><br>${message}`;
                     }
                 }
-                
+
                 // Disable document controls
                 this.disableDocumentControls();
             },
@@ -254,7 +254,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
                 if (banner) {
                     banner.classList.add('hidden');
                 }
-                
+
                 // Enable document controls
                 this.enableDocumentControls();
             },
@@ -262,7 +262,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             disableDocumentControls() {
                 const documentSelect = document.getElementById('document-select');
                 const searchInput = document.getElementById('search-input');
-                
+
                 if (documentSelect) documentSelect.disabled = true;
                 if (searchInput) searchInput.disabled = true;
             },
@@ -270,7 +270,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             enableDocumentControls() {
                 const documentSelect = document.getElementById('document-select');
                 const searchInput = document.getElementById('search-input');
-                
+
                 if (documentSelect) documentSelect.disabled = false;
                 if (searchInput) searchInput.disabled = false;
             },
@@ -293,42 +293,42 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             // Step navigation for 2-step flow
             goToStep(stepNumber) {
                 if (stepNumber < 1 || stepNumber > 2) return false;
-                
+
                 this.currentStep = stepNumber;
-                
+
                 // Update step pills
                 document.querySelectorAll('.workspace-steps .step').forEach((step, index) => {
                     step.classList.toggle('active', index + 1 === stepNumber);
                 });
-                
+
                 // Update step content
                 document.querySelectorAll('.step-content').forEach((content, index) => {
                     content.classList.toggle('active', index + 1 === stepNumber);
                 });
-                
+
                 // Update Prompt Studio availability
                 this.updatePromptStudioAvailability();
-                
+
                 this.logWorkspaceState('step_navigation', {
                     step: stepNumber,
                     contextSize: this.selectedContext.articles.length
                 });
-                
+
                 return true;
             },
 
             updatePromptStudioAvailability() {
                 const step2Pill = document.querySelector('.workspace-steps .step[data-step="2"]');
                 const executeBtn = document.getElementById('execute-ai');
-                
+
                 const hasContext = this.selectedContext.articles.length > 0;
-                
+
                 if (step2Pill) {
                     step2Pill.classList.toggle('disabled', !hasContext);
                     step2Pill.style.pointerEvents = hasContext ? 'auto' : 'none';
                     step2Pill.style.opacity = hasContext ? '1' : '0.5';
                 }
-                
+
                 if (executeBtn) {
                     executeBtn.disabled = !hasContext || !this.chromeAIAvailable;
                 }
@@ -339,7 +339,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
                 const modal = document.getElementById(`${modalId}-modal`);
                 if (modal) {
                     modal.classList.remove('hidden');
-                    
+
                     // Load current settings into form
                     if (modalId === 'settings') {
                         this.loadSettingsIntoForm();
@@ -361,7 +361,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
                     const state = await getSetting('state') || '';
                     const city = await getSetting('city') || '';
                     const serverlessEndpoint = await getSetting('serverlessEndpoint') || '';
-                    
+
                     document.getElementById('settings-language').value = language;
                     document.getElementById('settings-country').value = country;
                     document.getElementById('settings-state').value = state;
@@ -460,19 +460,19 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
                     await setSetting('state', state);
                     await setSetting('city', city);
                     await setSetting('serverlessEndpoint', serverlessEndpoint);
-                    
+
                     // Set base URL from defaults
                     const baseUrl = getDefaultBaseUrl(country);
                     await setSetting('baseUrl', baseUrl);
 
                     this.toastSystem.show('Configurações salvas', 'success');
                     this.hideModal('settings');
-                    
+
                     // Refresh workspace if on step 1
                     if (this.currentStep === 1) {
                         await this.refreshWorkspace();
                     }
-                    
+
                     return true;
                 } catch (error) {
                     console.error('Error saving settings:', error);
@@ -557,12 +557,12 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
                     const savedContext = await getSetting('workspace-context-state');
                     if (savedContext) {
                         this.selectedContext = savedContext;
-                        
+
                         const contextArea = document.getElementById('selected-context');
                         if (contextArea) {
                             contextArea.value = this.selectedContext.text;
                         }
-                        
+
                         this.updatePromptStudioAvailability();
                     }
                 } catch (error) {
@@ -602,7 +602,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             // Error handling
             handleOfflineFallback(context) {
                 this.toastSystem.show('Modo offline ativado. Funcionalidades limitadas.', 'warning', 5000);
-                
+
                 // Try to use cached data
                 if (context === 'document_loading' && this.availableDocuments.length === 0) {
                     // Show cached documents if available
@@ -695,7 +695,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             });
 
             const config = await mockApp.validateRequiredSettings();
-            
+
             expect(config.isValid).toBe(false);
             expect(config.missing).toEqual(['language', 'country', 'baseUrl']);
         });
@@ -712,7 +712,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             });
 
             const config = await mockApp.validateRequiredSettings();
-            
+
             expect(config.isValid).toBe(true);
             expect(config.missing).toEqual([]);
             expect(config.settings.language).toBe('pt-BR');
@@ -772,7 +772,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
     describe('2-Step Workspace Navigation', () => {
         it('should initialize with step 1 active', () => {
             expect(mockApp.currentStep).toBe(1);
-            
+
             const activeStep = document.querySelector('.workspace-steps .step.active');
             expect(activeStep.textContent).toBe('Leis & Artigos');
             expect(activeStep.dataset.step).toBe('1');
@@ -843,7 +843,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
         });
 
         it('should log workspace state during navigation', () => {
-            const consoleSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+            const consoleSpy = vi.spyOn(console, 'debug').mockImplementation(() => { });
 
             mockApp.goToStep(2);
 
@@ -925,7 +925,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             const result = await mockApp.saveSettings();
 
             expect(result).toBe(false);
-            
+
             const errorToast = mockToastSystem.toasts.find(t => t.type === 'error');
             expect(errorToast).toBeTruthy();
             expect(errorToast.message).toBe('Erro ao salvar configurações');
@@ -943,12 +943,12 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             });
 
             mockApp.currentStep = 1;
-            
+
             document.getElementById('settings-language').value = 'pt-BR';
             document.getElementById('settings-country').value = 'br';
 
             const refreshSpy = vi.spyOn(mockApp, 'refreshWorkspace');
-            
+
             await mockApp.saveSettings();
 
             expect(refreshSpy).toHaveBeenCalled();
@@ -1001,20 +1001,20 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             await mockApp.restoreContextState();
 
             expect(mockApp.selectedContext).toEqual(savedContext);
-            
+
             const contextArea = document.getElementById('selected-context');
             expect(contextArea.value).toBe(savedContext.text);
         });
 
         it('should handle context restoration errors gracefully', async () => {
             getSetting.mockRejectedValue(new Error('Database error'));
-            
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
             await mockApp.restoreContextState();
 
             expect(consoleSpy).toHaveBeenCalledWith('Error restoring context state:', expect.any(Error));
-            
+
             consoleSpy.mockRestore();
         });
 
@@ -1074,7 +1074,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
                 }
             };
 
-            const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
 
             const available = await mockApp.checkChromeAIAvailability();
 
@@ -1109,7 +1109,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             const documents = await mockApp.loadAvailableDocuments();
 
             expect(documents).toEqual([]);
-            
+
             const errorToast = mockToastSystem.toasts.find(t => t.type === 'error');
             expect(errorToast).toBeTruthy();
             expect(errorToast.message).toBe('Erro ao carregar documentos');
@@ -1152,7 +1152,7 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             testCases.forEach(({ url, expectedError }) => {
                 document.getElementById('settings-serverless-endpoint').value = url;
                 const validation = mockApp.validateSettingsForm();
-                
+
                 expect(validation.isValid).toBe(false);
                 expect(validation.errors.serverlessEndpoint).toBe(expectedError);
             });
@@ -1178,10 +1178,10 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
         it('should complete new user onboarding flow', async () => {
             // 1. New user opens workspace - should show configuration banner
             getSetting.mockResolvedValue(null); // No settings saved
-            
+
             const config = await mockApp.validateRequiredSettings();
             expect(config.isValid).toBe(false);
-            
+
             mockApp.showConfigurationBanner(config.missing);
             expect(document.getElementById('configuration-banner').classList.contains('hidden')).toBe(false);
 
@@ -1299,5 +1299,76 @@ describe('Workspace Flow Simplification - Comprehensive Tests', () => {
             expect(mockApp.selectedContext.articles).toHaveLength(0);
             expect(mockApp.selectedContext.text).toBe('');
         });
+    });
+});
+
+describe('Jurisdiction Path Mapping', () => {
+    it('should correctly map pt-BR language to BR country', () => {
+        const mockApp = {
+            formatJurisdictionForCorpus: (jurisdiction, language) => {
+                const languageToCountry = {
+                    'pt-BR': 'BR',
+                    'en-US': 'US',
+                    'es-ES': 'ES'
+                };
+
+                if (!jurisdiction) {
+                    const country = languageToCountry[language] || 'US';
+                    return `${country}/Federal`;
+                }
+
+                const parts = [];
+                const country = jurisdiction.country || languageToCountry[language] || 'US';
+                parts.push(country.toUpperCase());
+
+                if (jurisdiction.state) {
+                    parts.push(jurisdiction.state.toUpperCase());
+                } else {
+                    parts.push('Federal');
+                }
+
+                if (jurisdiction.city) {
+                    parts.push(jurisdiction.city);
+                }
+
+                return parts.join('/');
+            }
+        };
+
+        // Test pt-BR → BR/Federal
+        expect(mockApp.formatJurisdictionForCorpus(null, 'pt-BR')).toBe('BR/Federal');
+        expect(mockApp.formatJurisdictionForCorpus({}, 'pt-BR')).toBe('BR/Federal');
+
+        // Test en-US → US/Federal  
+        expect(mockApp.formatJurisdictionForCorpus(null, 'en-US')).toBe('US/Federal');
+        expect(mockApp.formatJurisdictionForCorpus({}, 'en-US')).toBe('US/Federal');
+
+        // Test es-ES → ES/Federal
+        expect(mockApp.formatJurisdictionForCorpus(null, 'es-ES')).toBe('ES/Federal');
+        expect(mockApp.formatJurisdictionForCorpus({}, 'es-ES')).toBe('ES/Federal');
+
+        // Test with explicit country (should override language mapping)
+        expect(mockApp.formatJurisdictionForCorpus({ country: 'FR' }, 'pt-BR')).toBe('FR/Federal');
+    });
+
+    it('should generate correct file paths for different languages', () => {
+        // Simulate the worker path generation logic
+        const generatePath = (language, jurisdiction, fileSlug) => {
+            const languageToCountry = {
+                'pt-BR': 'BR',
+                'en-US': 'US',
+                'es-ES': 'ES'
+            };
+
+            const country = languageToCountry[language] || 'US';
+            const level = jurisdiction?.includes('/') ? jurisdiction.split('/')[1].toLowerCase() : 'federal';
+            const dir = `${language}/${country}/${level}/constitution`;
+            return `${dir}/${fileSlug}.md`;
+        };
+
+        // Test correct paths are generated
+        expect(generatePath('pt-BR', 'BR/Federal', 'del1535')).toBe('pt-BR/BR/federal/constitution/del1535.md');
+        expect(generatePath('en-US', 'US/Federal', 'amendment1')).toBe('en-US/US/federal/constitution/amendment1.md');
+        expect(generatePath('es-ES', 'ES/Federal', 'articulo1')).toBe('es-ES/ES/federal/constitution/articulo1.md');
     });
 });

@@ -1167,7 +1167,7 @@ class LexFlowApp {
             // Build form data for markdown generation
             const formData = {
                 title: document.getElementById('edit-title').value,
-                jurisdiction: typeof item.jurisdiction === 'string' ? item.jurisdiction : this.formatJurisdictionForCorpus(item.jurisdiction),
+                jurisdiction: typeof item.jurisdiction === 'string' ? item.jurisdiction : this.formatJurisdictionForCorpus(item.jurisdiction, document.getElementById('edit-language').value),
                 language: document.getElementById('edit-language').value,
                 sourceUrl: document.getElementById('edit-source-url').value,
                 versionDate: document.getElementById('edit-version-date').value || new Date().toISOString().split('T')[0],
@@ -1204,7 +1204,7 @@ class LexFlowApp {
             // Build form data
             const formData = {
                 title: document.getElementById('edit-title').value,
-                jurisdiction: typeof item.jurisdiction === 'string' ? item.jurisdiction : this.formatJurisdictionForCorpus(item.jurisdiction),
+                jurisdiction: typeof item.jurisdiction === 'string' ? item.jurisdiction : this.formatJurisdictionForCorpus(item.jurisdiction, document.getElementById('edit-language').value),
                 language: document.getElementById('edit-language').value,
                 sourceUrl: document.getElementById('edit-source-url').value,
                 versionDate: document.getElementById('edit-version-date').value || new Date().toISOString().split('T')[0],
@@ -1432,28 +1432,42 @@ class LexFlowApp {
     }
 
     /**
-     * Format jurisdiction for corpus in slash format
+     * Format jurisdiction for corpus storage
      * @param {Object} jurisdiction - Jurisdiction object
-     * @returns {string} Formatted jurisdiction like "US/Federal" or "BR/RS/PortoAlegre"
+     * @param {string} language - Language code to derive country if needed
+     * @returns {string} Formatted jurisdiction like "US/Federal" or "BR/Federal"
      */
-    formatJurisdictionForCorpus(jurisdiction) {
-        if (!jurisdiction) return 'US/Federal';
+    formatJurisdictionForCorpus(jurisdiction, language) {
+        // Language to country mapping
+        const languageToCountry = {
+            'pt-BR': 'BR',
+            'en-US': 'US',
+            'es-ES': 'ES'
+        };
+
+        if (!jurisdiction) {
+            const country = languageToCountry[language] || 'US';
+            return `${country}/Federal`;
+        }
 
         const parts = [];
-        if (jurisdiction.country) {
-            parts.push(jurisdiction.country.toUpperCase());
-        }
+        
+        // Use explicit country or derive from language
+        const country = jurisdiction.country || languageToCountry[language] || 'US';
+        parts.push(country.toUpperCase());
+        
         if (jurisdiction.state) {
             parts.push(jurisdiction.state.toUpperCase());
-        } else if (jurisdiction.country) {
+        } else {
             // Add "Federal" for country-level jurisdiction
             parts.push('Federal');
         }
+        
         if (jurisdiction.city) {
             parts.push(jurisdiction.city);
         }
 
-        return parts.join('/') || 'US/Federal';
+        return parts.join('/');
     }
 
     /**
