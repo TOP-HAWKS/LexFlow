@@ -520,11 +520,21 @@ class LexFlowApp {
 
     updatePromptStudioContext() {
         const contextSummary = document.getElementById('context-summary');
+        const placeholder = document.getElementById('ai-placeholder');
+        const aiOutput = document.getElementById('ai-output');
+        
         if (contextSummary && this.selectedArticles.length > 0) {
             const summary = `${this.selectedArticles.length} article(s) selected from ${this.currentDocument?.title || 'document'}:\n\n` +
                 this.selectedArticles.map(article => `• ${article.number}`).join('\n');
 
             contextSummary.textContent = summary;
+        }
+        
+        // Show placeholder if no AI result is displayed
+        if (placeholder && aiOutput) {
+            if (aiOutput.style.display === 'none' || !aiOutput.style.display) {
+                placeholder.style.display = 'flex';
+            }
         }
     }
 
@@ -671,7 +681,10 @@ class LexFlowApp {
         const thinkingDiv = document.getElementById('ai-thinking');
         const resultDiv = document.getElementById('ai-result');
         const sendToCurationBtn = document.getElementById('send-to-curation');
+        const placeholder = document.getElementById('ai-placeholder');
 
+        // Hide placeholder and show AI output
+        if (placeholder) placeholder.style.display = 'none';
         outputContainer.style.display = 'block';
         thinkingDiv.style.display = 'flex';
         resultDiv.style.display = 'none';

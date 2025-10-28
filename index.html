@@ -154,35 +154,39 @@
 
                 <!-- Step 2: Prompt Studio -->
                 <div id="step-prompt-studio" class="workspace-step">
-                    <div class="workspace-container">
-                        <div class="prompt-studio-container">
-                            <div class="section-title">
-                                🤖 Prompt Studio
-                            </div>
+                    <div class="prompt-studio-layout">
+                        <div class="section-title" style="grid-column: 1 / -1;">
+                            🤖 Prompt Studio
+                        </div>
 
+                        <!-- Left Column: Context & Configuration -->
+                        <div class="prompt-left-panel">
                             <div class="context-preview" id="context-preview">
                                 <div class="section-title">Selected Context</div>
                                 <div id="context-summary"></div>
                             </div>
 
-                            <div class="preset-buttons">
-                                <button class="preset-btn active" data-preset="executive-summary">
-                                    📝 Executive Summary
-                                </button>
-                                <button class="preset-btn" data-preset="legal-analysis">
-                                    🔍 Legal Analysis
-                                </button>
-                                <button class="preset-btn" data-preset="legal-comparison">
-                                    ⚖️ Legal Comparison
-                                </button>
-                                <button class="preset-btn" data-preset="clause-generation">
-                                    📋 Clause Generation
-                                </button>
+                            <div class="preset-section">
+                                <div class="section-title">Analysis Templates</div>
+                                <div class="preset-buttons">
+                                    <button class="preset-btn active" data-preset="executive-summary">
+                                        📝 Executive Summary
+                                    </button>
+                                    <button class="preset-btn" data-preset="legal-analysis">
+                                        🔍 Legal Analysis
+                                    </button>
+                                    <button class="preset-btn" data-preset="legal-comparison">
+                                        ⚖️ Legal Comparison
+                                    </button>
+                                    <button class="preset-btn" data-preset="clause-generation">
+                                        📋 Clause Generation
+                                    </button>
+                                </div>
                             </div>
 
                             <div class="form-group">
                                 <label class="form-label">Custom Prompt</label>
-                                <textarea class="form-control" rows="4" id="custom-prompt"
+                                <textarea class="form-control" rows="6" id="custom-prompt"
                                     placeholder="Describe what you would like the AI to analyze...">Create an executive summary of the selected articles, highlighting the main rights and obligations, using accessible language for presentation to the client.</textarea>
                             </div>
 
@@ -194,37 +198,67 @@
                                     📝 Send to Curation
                                 </button>
                             </div>
+                        </div>
 
-                            <div class="ai-output" id="ai-output" style="display: none;">
-                                <div class="ai-thinking" id="ai-thinking">
-                                    <div class="spinner"></div>
-                                    Analyzing with AI...
-                                </div>
-                                <div id="ai-result" style="display: none;">
-                                    <div id="result-content"></div>
-                                    <div class="result-actions">
-                                        <div class="feedback-buttons">
-                                            <button class="feedback-btn" data-feedback="positive"
-                                                title="Useful result">
-                                                👍
-                                            </button>
-                                            <button class="feedback-btn" data-feedback="negative"
-                                                title="Non-useful result">
-                                                👎
+                        <!-- Right Column: AI Output & Results -->
+                        <div class="prompt-right-panel">
+                            <div class="section-title">AI Analysis Results</div>
+                            
+                            <div class="ai-output-container">
+                                <div class="ai-output" id="ai-output" style="display: none;">
+                                    <div class="ai-thinking" id="ai-thinking">
+                                        <div class="spinner"></div>
+                                        Analyzing with AI...
+                                    </div>
+                                    <div id="ai-result" style="display: none;">
+                                        <div id="result-content"></div>
+                                        <div class="result-actions">
+                                            <div class="feedback-buttons">
+                                                <button class="feedback-btn" data-feedback="positive"
+                                                    title="Useful result">
+                                                    👍
+                                                </button>
+                                                <button class="feedback-btn" data-feedback="negative"
+                                                    title="Non-useful result">
+                                                    👎
+                                                </button>
+                                            </div>
+                                            <button class="copy-btn" id="copy-result-btn" title="Copy result">
+                                                📋 Copy
                                             </button>
                                         </div>
-                                        <button class="copy-btn" id="copy-result-btn" title="Copy result">
-                                            📋 Copy
-                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="ai-placeholder" id="ai-placeholder">
+                                    <div class="placeholder-content">
+                                        <div class="placeholder-icon">🤖</div>
+                                        <h3>Ready for AI Analysis</h3>
+                                        <p>Select a template or write a custom prompt, then click "Perform Analysis with AI" to get started.</p>
+                                        <div class="placeholder-features">
+                                            <div class="feature-item">
+                                                <span class="feature-icon">⚡</span>
+                                                <span>Chrome Built-in AI (Gemini Nano)</span>
+                                            </div>
+                                            <div class="feature-item">
+                                                <span class="feature-icon">🔒</span>
+                                                <span>Privacy-focused local processing</span>
+                                            </div>
+                                            <div class="feature-item">
+                                                <span class="feature-icon">📊</span>
+                                                <span>Structured legal analysis</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <div class="step-actions">
-                                <button class="btn btn-secondary" id="back-to-articles">
-                                    ← Back to Articles
-                                </button>
-                            </div>
+                        <!-- Bottom Navigation -->
+                        <div class="step-actions" style="grid-column: 1 / -1;">
+                            <button class="btn btn-secondary" id="back-to-articles">
+                                ← Back to Articles
+                            </button>
                         </div>
                     </div>
                 </div>
