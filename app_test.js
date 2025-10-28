@@ -160,6 +160,11 @@ class LexFlowApp {
             this.executeAI();
         });
 
+        // Prompt AI built-in button
+        document.getElementById('prompt-ai-builtin-btn')?.addEventListener('click', () => {
+            this.executePromptAI();
+        });
+
         // Feedback buttons
         document.querySelectorAll('.feedback-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -454,6 +459,60 @@ class LexFlowApp {
             this.toastSystem.show('Chrome AI não disponível - usando resultado de demonstração', 'warning', 8000);
         }
     }
+
+    /**
+     * Execute Prompt AI built-in - Nova API do Gemini Nano
+     * Esta função será implementada futuramente para usar uma API diferente do summarizer
+     */
+    async executePromptAI() {
+        if (this.selectedArticles.length === 0) {
+            this.toastSystem.show('Selecione pelo menos um artigo para análise', 'error');
+            return;
+        }
+    
+        const outputContainer = document.getElementById('ai-output');
+        const thinkingDiv = document.getElementById('ai-thinking');
+        const resultDiv = document.getElementById('ai-result');
+    
+        outputContainer.style.display = 'block';
+        thinkingDiv.style.display = 'flex';
+        resultDiv.style.display = 'none';
+    
+        try {
+            const context = this.selectedArticles.map(a => `${a.number}: ${a.content}`).join('\n\n');
+            const userPrompt = document.getElementById('custom-prompt').value;
+    
+            const systemPrompt = `
+                Você é um assistente jurídico especializado em direito brasileiro.
+                Analise o conteúdo a seguir e produza um texto claro, técnico e bem estruturado.
+                Sempre responda em português jurídico formal.
+            `;
+    
+            // Chama a Prompt API do Gemini Nano via ChromeAI
+            const result = await this.chromeAI.analyzeText(systemPrompt, context + '\n\n' + userPrompt, {
+                outputLang: 'en',
+                forceReal: true
+            });
+    
+            thinkingDiv.style.display = 'none';
+            resultDiv.style.display = 'block';
+    
+            if (result.success) {
+                document.getElementById('result-content').innerHTML = this.formatAIResult(result.result);
+                await this.saveAnalysisToHistory(userPrompt, result.result);
+                this.toastSystem.show(`Análise concluída com sucesso! (${result.source})`, 'success');
+            } else {
+                throw new Error(result.message || 'Erro na análise');
+            }
+    
+        } catch (error) {
+            console.error('Prompt AI execution error:', error);
+            thinkingDiv.style.display = 'none';
+            this.showFallbackResult();
+            this.toastSystem.show('Erro na execução do Prompt AI', 'error');
+        }
+    }
+    
 
     showFallbackResult() {
         const resultDiv = document.getElementById('ai-result');
