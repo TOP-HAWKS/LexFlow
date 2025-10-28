@@ -18,7 +18,7 @@ class LexFlowApp {
         this.chromeAI = new ChromeAI();
         this.dataManager = new DataManager();
         this.toastSystem = new ToastSystem();
-        
+
         this.currentView = 'home';
         this.currentStep = 'laws-articles';
         this.selectedArticles = [];
@@ -30,7 +30,7 @@ class LexFlowApp {
         this.queueItems = [];
         this.historyItems = [];
         this.aiResult = null;
-        
+
         this.init();
     }
 
@@ -52,13 +52,13 @@ class LexFlowApp {
                 };
                 await setSetting('appConfig', appConfig);
             }
-            
+
             // Set serverless endpoint
             await setSetting('serverlessEndpoint', 'https://lexflow-corpus.webmaster-1d0.workers.dev');
-            
+
             // Initialize data
             await this.dataManager.init();
-            
+
             // Resolve corpus URL (with fallback handling)
             let corpusBaseUrl;
             try {
@@ -67,27 +67,27 @@ class LexFlowApp {
                 console.warn('[LexFlow] Corpus URL resolution failed:', corpusError);
                 corpusBaseUrl = 'https://raw.githubusercontent.com/org/legal-corpus/main';
             }
-            
+
             // Load saved data
             await this.loadUserData();
-            
+
             // Setup event listeners
             this.setupEventListeners();
-            
+
             // Load workspace state
             this.loadWorkspaceState();
-            
+
             // Initialize documents from corpus
             await this.initializeDocumentsFromCorpus(corpusBaseUrl);
-            
+
             // Update UI
             this.updateStats();
-            
+
             console.log('[LexFlow] Application initialized successfully');
         } catch (error) {
             console.error('[LexFlow] Critical initialization error:', error);
             showToast('Application initialization failed. Some features may not work properly.', 'error');
-            
+
             // Try to continue with minimal functionality
             try {
                 await this.dataManager.init();
@@ -241,7 +241,7 @@ class LexFlowApp {
     showDocumentsLoading(show) {
         const loadingEl = document.getElementById('documents-loading');
         const documentList = document.getElementById('document-list');
-        
+
         if (show) {
             loadingEl.style.display = 'flex';
             documentList.innerHTML = '<div class="loading-state" id="documents-loading"><div class="spinner"></div>Loading documents...</div>';
@@ -267,7 +267,7 @@ class LexFlowApp {
 
     renderDocuments(documents) {
         const documentList = document.getElementById('document-list');
-        
+
         if (documents.length === 0) {
             documentList.innerHTML = `
                 <div class="empty-state">
@@ -277,7 +277,7 @@ class LexFlowApp {
             `;
             return;
         }
-        
+
         documentList.innerHTML = documents.map(doc => `
             <div class="document-item" data-doc-id="${doc.id}">
                 <div class="document-title">${doc.title}</div>
@@ -299,15 +299,15 @@ class LexFlowApp {
         document.querySelectorAll('.view').forEach(view => {
             view.classList.remove('active');
         });
-        
+
         // Show selected view
         document.getElementById(viewName + '-view').classList.add('active');
-        
+
         // Update nav tabs
         document.querySelectorAll('.nav-tab').forEach(tab => {
             tab.classList.remove('active');
         });
-        
+
         // Find and activate the correct tab
         const tabTexts = {
             'home': 'Home',
@@ -315,15 +315,15 @@ class LexFlowApp {
             'collector': 'Collector',
             'history': 'History'
         };
-        
+
         document.querySelectorAll('.nav-tab').forEach(tab => {
             if (tab.textContent.includes(tabTexts[viewName])) {
                 tab.classList.add('active');
             }
         });
-        
+
         this.currentView = viewName;
-        
+
         // Reset workspace to first step when switching to workspace
         if (viewName === 'workspace') {
             this.showStep('laws-articles');
@@ -336,16 +336,16 @@ class LexFlowApp {
             item.classList.remove('selected');
         });
         element.classList.add('selected');
-        
+
         this.currentDocument = this.availableDocuments.find(doc => doc.id === docId);
         if (this.currentDocument) {
             await this.displayArticles(this.currentDocument);
         }
     }
 
-    async displayArticles(document) {
+    async displayArticles(doc) {
         const container = document.getElementById('articles-container');
-        
+
         // Show loading state
         container.innerHTML = `
             <div class="loading-state">
@@ -353,11 +353,11 @@ class LexFlowApp {
                 Loading articles...
             </div>
         `;
-        
+
         try {
-            const articles = await fetchDocumentContent(document);
+            const articles = await fetchDocumentContent(doc);
             this.currentDocumentArticles = articles;
-            
+
             if (articles.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -367,7 +367,7 @@ class LexFlowApp {
                 `;
                 return;
             }
-            
+
             container.innerHTML = articles.map(article => `
                 <div class="article-item" data-article-id="${article.id}">
                     <div class="article-number">${article.number}</div>
@@ -382,7 +382,7 @@ class LexFlowApp {
                     this.toggleArticle(e.currentTarget, articleId);
                 });
             });
-            
+
         } catch (error) {
             console.error('Error loading articles:', error);
             container.innerHTML = `
@@ -399,16 +399,16 @@ class LexFlowApp {
 
     toggleArticle(element, articleId) {
         element.classList.toggle('selected');
-        
+
         const article = this.currentDocumentArticles.find(a => a.id === articleId);
         if (!article) return;
-        
+
         if (element.classList.contains('selected')) {
             this.selectedArticles.push(article);
         } else {
             this.selectedArticles = this.selectedArticles.filter(a => a.id !== articleId);
         }
-        
+
         this.updateSelectedContext();
         this.updateGoToPromptStudioButton();
     }
@@ -416,7 +416,7 @@ class LexFlowApp {
     updateSelectedContext() {
         const contextContainer = document.getElementById('selected-context');
         const itemsContainer = document.getElementById('context-items');
-        
+
         if (this.selectedArticles.length > 0) {
             contextContainer.style.display = 'block';
             itemsContainer.innerHTML = this.selectedArticles.map((article, index) => `
@@ -440,7 +440,7 @@ class LexFlowApp {
                     this.removeArticle(articleId);
                 });
             });
-            
+
             // Update context for prompt studio
             this.buildSelectedContext();
         } else {
@@ -451,10 +451,10 @@ class LexFlowApp {
     }
 
     buildSelectedContext() {
-        this.selectedContext = this.selectedArticles.map(article => 
+        this.selectedContext = this.selectedArticles.map(article =>
             `${article.number}: ${article.content}`
         ).join('\n\n');
-        
+
         this.selectedCitations = this.selectedArticles.map(article => ({
             number: article.number,
             citation: article.citation,
@@ -472,7 +472,7 @@ class LexFlowApp {
     removeArticle(articleId) {
         // Remove from array
         this.selectedArticles = this.selectedArticles.filter(a => a.id !== articleId);
-        
+
         // Remove visual selection
         const articleElements = document.querySelectorAll('.article-item');
         articleElements.forEach(element => {
@@ -480,7 +480,7 @@ class LexFlowApp {
                 element.classList.remove('selected');
             }
         });
-        
+
         this.updateSelectedContext();
         this.updateGoToPromptStudioButton();
         this.toastSystem.show('Article removed from context', 'success');
@@ -492,18 +492,18 @@ class LexFlowApp {
             pill.classList.remove('active');
         });
         document.querySelector(`[data-step="${stepName}"]`).classList.add('active');
-        
+
         // Update step content
         document.querySelectorAll('.workspace-step').forEach(step => {
             step.classList.remove('active');
         });
         document.getElementById(`step-${stepName}`).classList.add('active');
-        
+
         this.currentStep = stepName;
-        
+
         // Save state to sessionStorage
         this.saveWorkspaceState();
-        
+
         if (stepName === 'prompt-studio') {
             this.updatePromptStudioContext();
         }
@@ -514,7 +514,7 @@ class LexFlowApp {
             this.toastSystem.show('Please select at least one article', 'error');
             return;
         }
-        
+
         this.showStep('prompt-studio');
     }
 
@@ -523,7 +523,7 @@ class LexFlowApp {
         if (contextSummary && this.selectedArticles.length > 0) {
             const summary = `${this.selectedArticles.length} article(s) selected from ${this.currentDocument?.title || 'document'}:\n\n` +
                 this.selectedArticles.map(article => `• ${article.number}`).join('\n');
-            
+
             contextSummary.textContent = summary;
         }
     }
@@ -537,7 +537,7 @@ class LexFlowApp {
             currentDocument: this.currentDocument,
             aiResult: this.aiResult
         };
-        
+
         try {
             sessionStorage.setItem('lexflow-workspace-state', JSON.stringify(state));
         } catch (error) {
@@ -556,12 +556,12 @@ class LexFlowApp {
                 this.selectedCitations = state.selectedCitations || [];
                 this.currentDocument = state.currentDocument || null;
                 this.aiResult = state.aiResult || null;
-                
+
                 // Restore UI state
                 if (this.currentStep !== 'laws-articles') {
                     this.showStep(this.currentStep);
                 }
-                
+
                 if (this.selectedArticles.length > 0) {
                     this.updateSelectedContext();
                     this.updateGoToPromptStudioButton();
@@ -576,12 +576,12 @@ class LexFlowApp {
         this.selectedArticles = [];
         this.selectedContext = '';
         this.selectedCitations = [];
-        
+
         // Remove all visual selections
         document.querySelectorAll('.article-item.selected').forEach(element => {
             element.classList.remove('selected');
         });
-        
+
         this.updateSelectedContext();
         this.updateGoToPromptStudioButton();
         this.toastSystem.show('All articles have been removed', 'success');
@@ -611,11 +611,11 @@ class LexFlowApp {
 
         // Add to queue
         this.queueItems.unshift(curationItem);
-        
+
         // Switch to collector view and show the new item
         this.showView('collector');
         this.updateCollectorView();
-        
+
         // Select the new item
         setTimeout(() => {
             const firstQueueItem = document.querySelector('.queue-item');
@@ -650,14 +650,14 @@ class LexFlowApp {
             btn.classList.remove('active');
         });
         element.classList.add('active');
-        
+
         const prompts = {
             'executive-summary': 'Create an executive summary of the selected articles, highlighting the main rights and obligations, using accessible language for presentation to the client.',
             'legal-analysis': 'Perform a detailed legal analysis of the selected articles, identifying potential conflicts, gaps, and relevant doctrinal interpretations.',
             'legal-comparison': 'Compare the selected articles, identifying similarities, differences, and possible normative hierarchies between them.',
             'clause-generation': 'Based on the selected articles, generate practical contractual clauses that comply with the presented legislation.'
         };
-        
+
         document.getElementById('custom-prompt').value = prompts[presetType] || prompts['executive-summary'];
     }
 
@@ -671,7 +671,7 @@ class LexFlowApp {
         const thinkingDiv = document.getElementById('ai-thinking');
         const resultDiv = document.getElementById('ai-result');
         const sendToCurationBtn = document.getElementById('send-to-curation');
-        
+
         outputContainer.style.display = 'block';
         thinkingDiv.style.display = 'flex';
         resultDiv.style.display = 'none';
@@ -698,20 +698,20 @@ class LexFlowApp {
                 thinkingDiv.style.display = 'none';
                 resultDiv.style.display = 'block';
                 sendToCurationBtn.style.display = 'inline-block';
-                
+
                 const formattedResult = this.formatAIResult(result.result);
                 document.getElementById('result-content').innerHTML = formattedResult;
-                
+
                 // Store result for curation
                 this.aiResult = {
                     prompt: userPrompt,
                     result: result.result,
                     timestamp: new Date().toISOString()
                 };
-                
+
                 // Save to history
                 await this.saveAnalysisToHistory(userPrompt, result.result);
-                
+
                 this.toastSystem.show('Analysis completed successfully!', 'success');
             } else {
                 throw new Error(result.message || 'Error in AI analysis');
@@ -720,10 +720,10 @@ class LexFlowApp {
         } catch (error) {
             console.error('AI execution error:', error);
             thinkingDiv.style.display = 'none';
-            
+
             // Show info banner about Chrome AI availability
             this.showAIUnavailableBanner();
-            
+
             this.toastSystem.show('Chrome AI not available. Please check your Chrome settings.', 'warning', 8000);
         }
     }
@@ -731,7 +731,7 @@ class LexFlowApp {
     showAIUnavailableBanner() {
         const resultDiv = document.getElementById('ai-result');
         resultDiv.style.display = 'block';
-        
+
         document.getElementById('result-content').innerHTML = `
             <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
                 <h4 style="color: #856404; margin: 0 0 0.5rem 0;">🔧 Chrome Built-in AI Not Available</h4>
@@ -750,7 +750,7 @@ class LexFlowApp {
                 </p>
             </div>
         `;
-        
+
         // Show send to curation button even without AI result
         document.getElementById('send-to-curation').style.display = 'inline-block';
     }
@@ -758,7 +758,7 @@ class LexFlowApp {
     showFallbackResult() {
         const resultDiv = document.getElementById('ai-result');
         resultDiv.style.display = 'block';
-        
+
         const mockResult = this.generateMockResult();
         document.getElementById('result-content').innerHTML = mockResult;
     }
@@ -815,31 +815,31 @@ class LexFlowApp {
         document.querySelectorAll('.feedback-btn').forEach(btn => {
             btn.classList.remove('active', 'positive', 'negative');
         });
-        
+
         // Add current feedback
         button.classList.add('active', type);
-        
+
         const message = type === 'positive' ? 'Obrigado pelo feedback positivo!' : 'Feedback registrado. Vamos melhorar!';
         this.toastSystem.show(message, 'success');
     }
 
     async copyResult() {
         const resultContent = document.getElementById('result-content').innerText;
-        
+
         try {
             await navigator.clipboard.writeText(resultContent);
-            
+
             const copyBtn = document.querySelector('.copy-btn');
             const originalText = copyBtn.innerHTML;
-            
+
             copyBtn.innerHTML = '✅ Copiado!';
             copyBtn.classList.add('copied');
-            
+
             setTimeout(() => {
                 copyBtn.innerHTML = originalText;
                 copyBtn.classList.remove('copied');
             }, 2000);
-            
+
             this.toastSystem.show('Resultado copiado para a área de transferência!', 'success');
         } catch (error) {
             this.toastSystem.show('Erro ao copiar. Tente selecionar o texto manualmente.', 'error');
@@ -853,12 +853,12 @@ class LexFlowApp {
             }
             return;
         }
-        
-        const filtered = this.currentDocumentArticles.filter(article => 
+
+        const filtered = this.currentDocumentArticles.filter(article =>
             article.content.toLowerCase().includes(term.toLowerCase()) ||
             article.number.toLowerCase().includes(term.toLowerCase())
         );
-        
+
         const container = document.getElementById('articles-container');
         if (filtered.length === 0) {
             container.innerHTML = `
@@ -869,7 +869,7 @@ class LexFlowApp {
             `;
             return;
         }
-        
+
         container.innerHTML = filtered.map(article => `
             <div class="article-item ${this.selectedArticles.find(a => a.id === article.id) ? 'selected' : ''}" data-article-id="${article.id}">
                 <div class="article-number">${article.number}</div>
@@ -910,27 +910,27 @@ class LexFlowApp {
 
         this.queueItems.push(...sampleItems);
         this.updateCollectorView();
-        this.toastSystem.show('Conteúdo de exemplo adicionado!', 'success');
+        this.toastSystem.show('Sample content added!', 'success');
     }
 
     updateCollectorView() {
         const queueContainer = document.getElementById('queue-items');
         const queueCount = document.getElementById('queue-count');
-        
+
         queueCount.textContent = this.queueItems.length;
-        
+
         if (this.queueItems.length === 0) {
-            queueContainer.innerHTML = '<p style="color: #7f8c8d; text-align: center; padding: 2rem;">Nenhum item na fila. Use o botão "Adicionar Conteúdo" para começar.</p>';
+            queueContainer.innerHTML = '<p style="color: #7f8c8d; text-align: center; padding: 2rem;">No items in queue. Use the "Add Content" button to get started.</p>';
             return;
         }
-        
+
         queueContainer.innerHTML = this.queueItems.map((item, index) => {
             const statusText = {
-                'queued': 'Aguardando',
-                'processed': 'Processado', 
-                'published': 'Publicado'
+                'queued': 'Queued',
+                'processed': 'Processed',
+                'published': 'Published'
             };
-            
+
             const getHostname = (url) => {
                 try {
                     return new URL(url).hostname;
@@ -938,12 +938,12 @@ class LexFlowApp {
                     return 'Fonte desconhecida';
                 }
             };
-            
+
             return `
                 <div class="queue-item ${index === 0 ? 'selected' : ''}" data-queue-index="${index}">
-                    <div class="queue-title">${item.title || 'Conteúdo Capturado'}</div>
+                    <div class="queue-title">${item.title || 'Captured Content'}</div>
                     <div class="queue-meta">
-                        <span class="status-badge status-${item.status}">${statusText[item.status] || 'Aguardando'}</span>
+                        <span class="status-badge status-${item.status}">${statusText[item.status] || 'Queued'}</span>
                         • ${getHostname(item.url || item.source_url)}
                         • ${new Date(item.timestamp).toLocaleDateString()}
                         ${item.mode ? `• ${item.mode === 'selection' ? 'Seleção' : 'Página completa'}` : ''}
@@ -961,7 +961,7 @@ class LexFlowApp {
                 this.selectQueueItem(e.currentTarget, index);
             });
         });
-        
+
         // Show first item in editor if available
         if (this.queueItems.length > 0) {
             this.showItemInEditor(this.queueItems[0]);
@@ -973,69 +973,69 @@ class LexFlowApp {
             item.classList.remove('selected');
         });
         element.classList.add('selected');
-        
+
         this.showItemInEditor(this.queueItems[index]);
     }
 
     showItemInEditor(item) {
         const editorForm = document.getElementById('metadata-form');
-        
+
         // Get jurisdiction display text
         const getJurisdictionText = (jurisdiction) => {
-            if (!jurisdiction) return 'Não especificada';
+            if (!jurisdiction) return 'Not specified';
             const parts = [];
             if (jurisdiction.country) parts.push(jurisdiction.country.toUpperCase());
             if (jurisdiction.state) parts.push(jurisdiction.state.toUpperCase());
             if (jurisdiction.city) parts.push(jurisdiction.city);
             if (jurisdiction.level) parts.push(`(${jurisdiction.level})`);
-            return parts.join(' - ') || 'Não especificada';
+            return parts.join(' - ') || 'Not specified';
         };
-        
+
         editorForm.innerHTML = `
             <div class="form-group">
-                <label class="form-label">Título *</label>
+                <label class="form-label">Title *</label>
                 <input type="text" class="form-control" id="edit-title" value="${(item.title || '').replace(/"/g, '&quot;')}" required>
             </div>
             
             <div class="form-group">
-                <label class="form-label">Jurisdição</label>
+                <label class="form-label">Jurisdiction</label>
                 <input type="text" class="form-control" id="edit-jurisdiction" 
                        value="${getJurisdictionText(item.jurisdiction)}" readonly>
-                <small class="form-text">Detectada automaticamente da fonte</small>
+                <small class="form-text">Automatically detected from source</small>
             </div>
             
             <div class="form-group">
-                <label class="form-label">Idioma</label>
+                <label class="form-label">Language</label>
                 <select class="form-control" id="edit-language">
-                    <option value="pt-BR" ${item.language === 'pt-BR' ? 'selected' : ''}>Português (Brasil)</option>
                     <option value="en-US" ${item.language === 'en-US' ? 'selected' : ''}>English (US)</option>
+                    <option value="pt-BR" ${item.language === 'pt-BR' ? 'selected' : ''}>Português (Brasil)</option>
                     <option value="es-ES" ${item.language === 'es-ES' ? 'selected' : ''}>Español</option>
                 </select>
             </div>
             
             <div class="form-group">
-                <label class="form-label">URL da Fonte *</label>
+                <label class="form-label">Source URL *</label>
                 <input type="url" class="form-control" id="edit-source-url" 
                        value="${(item.source_url || item.url || '').replace(/"/g, '&quot;')}" required>
             </div>
             
             <div class="form-group">
                 <label class="form-label">Version Date</label>
-                <input type="date" class="form-control" id="edit-version-date"ass="form-control" id="edit-version-date" 
+                <input type="date" class="form-control" id="edit-version-date" 
                        value="${item.version_date || new Date().toISOString().split('T')[0]}">
             </div>
             
             <div class="form-group">
-                <label class="form-label">Categoria</label>
+                <label class="form-label">Category</label>
                 <select class="form-control" id="edit-category">
-                    <option value="Direito Constitucional" ${item.category === 'Direito Constitucional' ? 'selected' : ''}>Direito Constitucional</option>
-                    <option value="Direito Civil" ${item.category === 'Direito Civil' ? 'selected' : ''}>Direito Civil</option>
-                    <option value="Direito Penal" ${item.category === 'Direito Penal' ? 'selected' : ''}>Direito Penal</option>
-                    <option value="Direito Trabalhista" ${item.category === 'Direito Trabalhista' ? 'selected' : ''}>Direito Trabalhista</option>
-                    <option value="Direito Administrativo" ${item.category === 'Direito Administrativo' ? 'selected' : ''}>Direito Administrativo</option>
-                    <option value="Direito Digital" ${item.category === 'Direito Digital' ? 'selected' : ''}>Direito Digital</option>
-                    <option value="Direito Ambiental" ${item.category === 'Direito Ambiental' ? 'selected' : ''}>Direito Ambiental</option>
-                    <option value="Outros" ${item.category === 'Outros' ? 'selected' : ''}>Outros</option>
+                    <option value="Constitutional Law" ${item.category === 'Constitutional Law' ? 'selected' : ''}>Constitutional Law</option>
+                    <option value="Civil Law" ${item.category === 'Civil Law' ? 'selected' : ''}>Civil Law</option>
+                    <option value="Criminal Law" ${item.category === 'Criminal Law' ? 'selected' : ''}>Criminal Law</option>
+                    <option value="Labor Law" ${item.category === 'Labor Law' ? 'selected' : ''}>Labor Law</option>
+                    <option value="Administrative Law" ${item.category === 'Administrative Law' ? 'selected' : ''}>Administrative Law</option>
+                    <option value="Digital Law" ${item.category === 'Digital Law' ? 'selected' : ''}>Digital Law</option>
+                    <option value="Environmental Law" ${item.category === 'Environmental Law' ? 'selected' : ''}>Environmental Law</option>
+                    <option value="Other" ${item.category === 'Other' ? 'selected' : ''}>Other</option>
                 </select>
             </div>
             
@@ -1043,7 +1043,7 @@ class LexFlowApp {
                 <label class="form-label">Tags</label>
                 <input type="text" class="form-control" id="edit-tags" 
                        value="${(item.metadata?.keywords?.join(', ') || '').replace(/"/g, '&quot;')}"
-                       placeholder="Separadas por vírgula">
+                       placeholder="Separated by commas">
             </div>
             
             <div class="form-group">
@@ -1073,22 +1073,30 @@ class LexFlowApp {
                     💾 Save Metadata
                 </button>
                 
-                <button class="btn btn-success" data-action="process-item" data-item-id="${item.id}" style="margin-top: 0.5rem;">
+                <button class="btn btn-success" data-action="process-item" data-item-id="${item.id}" style="margin-top: 0.5rem;" ${item.markdown ? '' : ''}>
                     ✅ Process & Generate Markdown
                 </button>
                 
-                <button class="btn btn-secondary" data-action="generate-pr" data-item-id="${item.id}" style="margin-top: 0.5rem;">
+                <button class="btn btn-secondary" data-action="generate-pr" data-item-id="${item.id}" style="margin-top: 0.5rem;" ${item.markdown ? '' : 'disabled'}>
                     🔄 Create Pull Request
                 </button>
             </div>
         `;
+
+        // Explicitly set language default to en-US if not specified
+        setTimeout(() => {
+            const languageSelect = document.getElementById('edit-language');
+            if (languageSelect) {
+                languageSelect.value = item.language || 'en-US';
+            }
+        }, 0);
 
         // Add event listeners to form action buttons
         editorForm.querySelectorAll('[data-action]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const action = e.target.dataset.action;
                 const itemId = parseInt(e.target.dataset.itemId);
-                
+
                 switch (action) {
                     case 'save-metadata':
                         this.saveItemMetadata(itemId);
@@ -1136,36 +1144,36 @@ class LexFlowApp {
         try {
             // Save metadata first
             await this.saveItemMetadata(itemId);
-            
+
             // Get item data
             const item = this.queueItems.find(item => item.id === itemId);
             if (!item) {
                 throw new Error('Item not found');
             }
-            
+
             // Build form data for markdown generation
             const formData = {
                 title: document.getElementById('edit-title').value,
-                jurisdiction: typeof item.jurisdiction === 'string' ? item.jurisdiction : this.formatJurisdictionForSubmission(item.jurisdiction),
+                jurisdiction: typeof item.jurisdiction === 'string' ? item.jurisdiction : this.formatJurisdictionForCorpus(item.jurisdiction),
                 language: document.getElementById('edit-language').value,
                 sourceUrl: document.getElementById('edit-source-url').value,
                 versionDate: document.getElementById('edit-version-date').value || new Date().toISOString().split('T')[0],
                 docType: document.getElementById('edit-category').value,
                 text: document.getElementById('edit-text').value
             };
-            
+
             // Generate markdown
             const markdown = buildMarkdownFromForm(formData);
-            
+
             showToast('Item processed and Markdown generated!', 'success');
-            
+
             // Update status
-            await this.updateCapturedContentMetadata(itemId, { 
+            await this.updateCapturedContentMetadata(itemId, {
                 status: 'processed',
                 processedAt: new Date().toISOString(),
                 markdown: markdown
             });
-            
+
         } catch (error) {
             console.error('Error processing item:', error);
             showToast('Error processing item', 'error');
@@ -1179,21 +1187,21 @@ class LexFlowApp {
             if (!item) {
                 throw new Error('Item not found');
             }
-            
+
             // Build form data
             const formData = {
                 title: document.getElementById('edit-title').value,
-                jurisdiction: typeof item.jurisdiction === 'string' ? item.jurisdiction : this.formatJurisdictionForSubmission(item.jurisdiction),
+                jurisdiction: typeof item.jurisdiction === 'string' ? item.jurisdiction : this.formatJurisdictionForCorpus(item.jurisdiction),
                 language: document.getElementById('edit-language').value,
                 sourceUrl: document.getElementById('edit-source-url').value,
                 versionDate: document.getElementById('edit-version-date').value || new Date().toISOString().split('T')[0],
                 docType: document.getElementById('edit-category').value,
                 text: document.getElementById('edit-text').value
             };
-            
+
             // Generate markdown
             const markdown = buildMarkdownFromForm(formData);
-            
+
             // Submit to corpus
             const result = await submitToCorpusPR({
                 title: `[LexFlow] ${formData.title}`,
@@ -1207,21 +1215,21 @@ class LexFlowApp {
                     source_url: formData.sourceUrl
                 }
             });
-            
+
             showToast('✅ Corpus submission successful', 'success');
-            
+
             // Show PR link if available
             if (result?.url) {
                 this.renderPRLink(result.url);
             }
-            
+
             // Update status
-            await this.updateCapturedContentMetadata(itemId, { 
+            await this.updateCapturedContentMetadata(itemId, {
                 status: 'published',
                 publishedAt: new Date().toISOString(),
                 prUrl: result?.url
             });
-            
+
         } catch (error) {
             console.error('Corpus submission failed:', error);
             showToast('Corpus submission failed. Please check your configuration.', 'error');
@@ -1230,16 +1238,16 @@ class LexFlowApp {
 
     updateHistoryView() {
         const historyContainer = document.getElementById('history-items');
-        
+
         if (this.historyItems.length === 0) {
-            historyContainer.innerHTML = '<p style="color: #7f8c8d; text-align: center; padding: 2rem;">Nenhuma análise realizada ainda. Use o Workspace Jurídico para começar.</p>';
+            historyContainer.innerHTML = '<p style="color: #7f8c8d; text-align: center; padding: 2rem;">No analysis performed yet. Use the Legal Workspace to get started.</p>';
             return;
         }
-        
+
         historyContainer.innerHTML = this.historyItems.slice(0, 10).map(item => {
             return `
                 <div class="history-item">
-                    <div class="history-title">Análise: ${item.articles || 'Análise Jurídica'}</div>
+                    <div class="history-title">Analysis: ${item.articles || 'Legal Analysis'}</div>
                     <div class="history-meta">
                         ${new Date(item.timestamp).toLocaleDateString()} • ${item.type || 'AI Analysis'} • ${item.articles || 'N/A'}
                     </div>
@@ -1254,7 +1262,7 @@ class LexFlowApp {
         document.getElementById('stat-analyses').textContent = this.historyItems.length;
         document.getElementById('stat-documents').textContent = this.queueItems.filter(item => item.status === 'processed').length;
         document.getElementById('stat-time').textContent = (this.historyItems.length * 0.5).toFixed(1) + 'h';
-        
+
         // Update history stats
         document.getElementById('history-analyses').textContent = this.historyItems.length;
         document.getElementById('history-documents').textContent = this.queueItems.filter(item => item.status === 'processed').length;
@@ -1264,7 +1272,7 @@ class LexFlowApp {
     updateDocuments() {
         // Reinitialize documents when jurisdiction changes
         this.initializeDocuments();
-        this.toastSystem.show('Documentos atualizados para a nova jurisdição', 'success');
+        this.toastSystem.show('Documents updated for new jurisdiction', 'success');
     }
 
     /**
@@ -1279,7 +1287,7 @@ class LexFlowApp {
                         console.log('Extension communication error:', chrome.runtime.lastError);
                         return;
                     }
-                    
+
                     if (response?.success && response.data) {
                         this.queueItems = response.data;
                         this.updateCollectorView();
@@ -1302,26 +1310,26 @@ class LexFlowApp {
             // Reload queue items from storage
             this.queueItems = await this.dataManager.getQueueItems();
             this.updateCollectorView();
-            
+
             // Show notification
             this.toastSystem.show(
-                `Conteúdo capturado: ${captureData.mode === 'selection' ? 'texto selecionado' : 'página completa'}`,
+                `Content captured: ${captureData.mode === 'selection' ? 'selected text' : 'full page'}`,
                 'success'
             );
 
             // Auto-switch to collector view if not already there
             if (this.currentView !== 'collector') {
                 this.toastSystem.showWithAction(
-                    'Conteúdo adicionado à fila de curadoria',
+                    'Content added to curation queue',
                     'info',
-                    'Ver Fila',
+                    'View Queue',
                     () => this.showView('collector'),
                     5000
                 );
             }
         } catch (error) {
             console.error('Error handling captured content:', error);
-            this.toastSystem.show('Erro ao processar conteúdo capturado', 'error');
+            this.toastSystem.show('Error processing captured content', 'error');
         }
     }
 
@@ -1345,7 +1353,7 @@ class LexFlowApp {
                         this.updateLocalMetadata(itemId, updates);
                         return;
                     }
-                    
+
                     if (response?.success) {
                         showToast('Metadata updated', 'success');
                         // Reload queue
@@ -1385,12 +1393,12 @@ class LexFlowApp {
      */
     formatJurisdiction(jurisdiction) {
         if (!jurisdiction) return '';
-        
+
         const parts = [];
         if (jurisdiction.country) parts.push(jurisdiction.country.toUpperCase());
         if (jurisdiction.state) parts.push(jurisdiction.state.toUpperCase());
         if (jurisdiction.city) parts.push(jurisdiction.city);
-        
+
         return parts.join(' - ');
     }
 
@@ -1401,13 +1409,38 @@ class LexFlowApp {
      */
     formatJurisdictionForSubmission(jurisdiction) {
         if (!jurisdiction) return 'unknown';
-        
+
         const parts = [];
         if (jurisdiction.country) parts.push(jurisdiction.country.toLowerCase());
         if (jurisdiction.state) parts.push(jurisdiction.state.toLowerCase());
         if (jurisdiction.city) parts.push(jurisdiction.city.toLowerCase());
-        
+
         return parts.join('-') || 'unknown';
+    }
+
+    /**
+     * Format jurisdiction for corpus in slash format
+     * @param {Object} jurisdiction - Jurisdiction object
+     * @returns {string} Formatted jurisdiction like "US/Federal" or "BR/RS/PortoAlegre"
+     */
+    formatJurisdictionForCorpus(jurisdiction) {
+        if (!jurisdiction) return 'US/Federal';
+
+        const parts = [];
+        if (jurisdiction.country) {
+            parts.push(jurisdiction.country.toUpperCase());
+        }
+        if (jurisdiction.state) {
+            parts.push(jurisdiction.state.toUpperCase());
+        } else if (jurisdiction.country) {
+            // Add "Federal" for country-level jurisdiction
+            parts.push('Federal');
+        }
+        if (jurisdiction.city) {
+            parts.push(jurisdiction.city);
+        }
+
+        return parts.join('/') || 'US/Federal';
     }
 
     /**
@@ -1438,7 +1471,7 @@ class LexFlowApp {
                 </a>
             </div>
         `;
-        
+
         // Add to form actions area
         const formActions = document.querySelector('.form-actions');
         if (formActions) {
@@ -1451,16 +1484,16 @@ class LexFlowApp {
      */
     async openSettingsModal() {
         const modal = document.getElementById('settings-modal');
-        
+
         // Load current settings
         const settings = await getAllSettings();
-        
+
         document.getElementById('settings-language').value = settings.language || 'en-US';
         document.getElementById('settings-country').value = settings.country || '';
         document.getElementById('settings-state').value = settings.state || '';
         document.getElementById('settings-city').value = settings.city || '';
         document.getElementById('settings-endpoint').value = settings.serverlessEndpoint || 'https://lexflow-corpus.webmaster-1d0.workers.dev';
-        
+
         modal.style.display = 'flex';
     }
 
@@ -1486,7 +1519,7 @@ class LexFlowApp {
             };
 
             await setSettings(settings);
-            
+
             // Update user location display
             const location = [settings.city, settings.state, settings.country]
                 .filter(Boolean)
