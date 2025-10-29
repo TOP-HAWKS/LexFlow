@@ -79,6 +79,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           title: 'LexFlow',
           message: notificationMessage
         });
+
+        // Notify all tabs about new content
+        try {
+          const tabs = await chrome.tabs.query({});
+          for (const tab of tabs) {
+            if (tab.url && tab.url.includes('chrome-extension://')) {
+              chrome.tabs.sendMessage(tab.id, {
+                type: "CONTENT_CAPTURED",
+                data: message.data
+              }).catch(() => {
+                // Ignore errors for tabs that don't have the content script
+              });
+            }
+          }
+        } catch (error) {
+          console.log('Error notifying tabs:', error);
+        }
         
         sendResponse({ success: true, mode: message.data.mode, charCount });
       } catch (error) {

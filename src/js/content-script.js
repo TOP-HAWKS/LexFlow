@@ -212,7 +212,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       const payload = createCapturePayload(text, 'selection');
-      chrome.runtime.sendMessage(payload);
+      chrome.runtime.sendMessage(payload, (response) => {
+        if (response?.success) {
+          // Notify UI to update capture queue
+          chrome.runtime.sendMessage({ type: "UPDATE_CAPTURE_QUEUE" });
+        }
+      });
 
     } catch (error) {
       console.error('Error capturing selection:', error);
@@ -228,7 +233,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       const payload = createCapturePayload(text, 'fullpage');
-      chrome.runtime.sendMessage(payload);
+      chrome.runtime.sendMessage(payload, (response) => {
+        if (response?.success) {
+          // Notify UI to update capture queue
+          chrome.runtime.sendMessage({ type: "UPDATE_CAPTURE_QUEUE" });
+        }
+      });
 
     } catch (error) {
       console.error('Error capturing full page:', error);

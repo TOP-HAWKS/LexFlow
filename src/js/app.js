@@ -1307,10 +1307,43 @@ class LexFlowApp {
                     }
                 });
 
+                // Listen for new captured content
+                chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+                    if (message?.type === "CONTENT_CAPTURED") {
+                        this.handleCapturedContent(message.data);
+                        sendResponse({ success: true });
+                    } else if (message?.type === "UPDATE_CAPTURE_QUEUE") {
+                        this.refreshCaptureQueue();
+                        sendResponse({ success: true });
+                    }
+                });
+
                 console.log('Extension integration setup complete');
             } catch (error) {
                 console.log('Extension integration not available:', error);
             }
+        }
+    }
+
+    /**
+     * Refresh capture queue from storage
+     */
+    async refreshCaptureQueue() {
+        try {
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                chrome.runtime.sendMessage({ type: "GET_CAPTURED_CONTENT" }, (response) => {
+                    if (response?.success && response.data) {
+                        this.queueItems = response.data;
+                        this.updateCollectorView();
+                    }
+                });
+            } else {
+                // Fallback to local storage
+                this.queueItems = await this.dataManager.getQueueItems();
+                this.updateCollectorView();
+            }
+        } catch (error) {
+            console.error('Error refreshing capture queue:', error);
         }
     }
 
@@ -1450,6 +1483,11 @@ class LexFlowApp {
             return `${country}/Federal`;
         }
 
+        // If jurisdiction is already a string in correct format, return it
+        if (typeof jurisdiction === 'string' && jurisdiction.includes('/')) {
+            return jurisdiction;
+        }
+
         const parts = [];
         
         // Use explicit country or derive from language
@@ -1458,13 +1496,11 @@ class LexFlowApp {
         
         if (jurisdiction.state) {
             parts.push(jurisdiction.state.toUpperCase());
+        } else if (jurisdiction.level) {
+            parts.push(jurisdiction.level.charAt(0).toUpperCase() + jurisdiction.level.slice(1));
         } else {
             // Add "Federal" for country-level jurisdiction
             parts.push('Federal');
-        }
-        
-        if (jurisdiction.city) {
-            parts.push(jurisdiction.city);
         }
 
         return parts.join('/');
