@@ -11,7 +11,7 @@ import { resolveCorpusBaseUrl, loadDocumentsFromCorpus } from '../util/corpus-re
 import { setSetting, getSetting, setSettings, getAllSettings } from '../util/settings.js';
 import { submitToCorpusPR, buildMarkdownFromForm } from '../util/worker-api.js';
 import { showToast } from '../util/toast.js';
-import { fetchDocumentsFromCorpus, fetchDocumentContent, searchArticlesAcrossDocuments } from '../util/document-fetcher.js';
+import { fetchDocumentsFromCorpus, fetchDocumentContent } from '../util/document-fetcher.js';
 
 class LexFlowApp {
     constructor() {
@@ -103,14 +103,8 @@ class LexFlowApp {
 
     async loadUserData() {
         try {
-            // Load user preferences
-            const userData = await this.dataManager.getUserData();
-            if (userData.name) {
-                document.getElementById('user-name').textContent = userData.name;
-            }
-            if (userData.location) {
-                document.getElementById('user-location').textContent = userData.location;
-            }
+            // Load user preferences and location from settings
+            await this.loadLocationFromSettings();
 
             // Load history
             this.historyItems = await this.dataManager.getHistory();
@@ -119,6 +113,12 @@ class LexFlowApp {
             // Load queue items (from Chrome storage if available)
             this.queueItems = await this.dataManager.getQueueItems();
             this.updateCollectorView();
+
+            // Initialize sample data if none exists
+            this.initializeSampleDataIfNeeded();
+
+            // Update statistics after loading data
+            this.updateStats();
 
             // Setup extension integration
             this.setupExtensionIntegration();
@@ -170,14 +170,41 @@ class LexFlowApp {
             this.sendToCuration();
         });
 
-        // Search input
-        document.getElementById('search-input')?.addEventListener('input', (e) => {
-            this.searchArticles(e.target.value);
-        });
+
 
         // Clear all articles button
         document.getElementById('clear-all-articles')?.addEventListener('click', () => {
             this.clearAllArticles();
+        });
+
+        // Refresh documents button
+        document.getElementById('refresh-documents-btn')?.addEventListener('click', async () => {
+            // Clear any cached articles when refreshing documents
+            try {
+                const { clearStoredArticles } = await import('../util/article-storage.js');
+                await clearStoredArticles();
+                console.log('[LexFlow] Cleared article cache');
+
+                // Also clear localStorage cache
+                const keys = Object.keys(localStorage).filter(key => key.startsWith('lexflow-articles-'));
+                keys.forEach(key => localStorage.removeItem(key));
+                console.log(`[LexFlow] Cleared ${keys.length} localStorage cache entries`);
+            } catch (error) {
+                console.warn('[LexFlow] Could not clear article cache:', error);
+            }
+
+            this.reloadDocuments();
+        });
+
+        // Event delegation for dynamically created retry buttons
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('retry-documents-btn')) {
+                this.initializeDocumentsFromCorpus();
+            } else if (e.target.classList.contains('retry-articles-btn')) {
+                if (this.currentDocument) {
+                    this.displayArticles(this.currentDocument);
+                }
+            }
         });
 
         // Preset buttons
@@ -226,11 +253,14 @@ class LexFlowApp {
 
     async initializeDocumentsFromCorpus(corpusBaseUrl) {
         try {
+            console.log('[LexFlow] Initializing documents from corpus...');
             this.showDocumentsLoading(true);
             const documents = await fetchDocumentsFromCorpus();
+            console.log('[LexFlow] Fetched documents:', documents);
             this.availableDocuments = documents;
             this.renderDocuments(documents);
             this.showDocumentsLoading(false);
+            console.log('[LexFlow] Documents initialization complete');
         } catch (error) {
             console.error('Error loading documents from corpus:', error);
             this.showDocumentsLoading(false);
@@ -239,13 +269,17 @@ class LexFlowApp {
     }
 
     showDocumentsLoading(show) {
-        const loadingEl = document.getElementById('documents-loading');
         const documentList = document.getElementById('document-list');
 
+        if (!documentList) {
+            console.warn('[LexFlow] Document list element not found');
+            return;
+        }
+
         if (show) {
-            loadingEl.style.display = 'flex';
             documentList.innerHTML = '<div class="loading-state" id="documents-loading"><div class="spinner"></div>Loading documents...</div>';
         } else {
+            const loadingEl = document.getElementById('documents-loading');
             if (loadingEl) {
                 loadingEl.style.display = 'none';
             }
@@ -258,7 +292,7 @@ class LexFlowApp {
             <div class="empty-state">
                 <p>No articles found for this document</p>
                 <small>Try changing the document or search term</small>
-                <button class="btn btn-secondary" onclick="window.app.initializeDocumentsFromCorpus()" style="margin-top: 1rem;">
+                <button class="btn btn-secondary retry-documents-btn" style="margin-top: 1rem;">
                     🔄 Retry
                 </button>
             </div>
@@ -331,6 +365,8 @@ class LexFlowApp {
     }
 
     async selectDocument(element, docId) {
+        console.log(`[LexFlow] Selecting document: ${docId}`);
+
         // Update UI
         document.querySelectorAll('.document-item').forEach(item => {
             item.classList.remove('selected');
@@ -338,13 +374,23 @@ class LexFlowApp {
         element.classList.add('selected');
 
         this.currentDocument = this.availableDocuments.find(doc => doc.id === docId);
+        console.log(`[LexFlow] Found document:`, this.currentDocument);
+
         if (this.currentDocument) {
             await this.displayArticles(this.currentDocument);
+        } else {
+            console.error(`[LexFlow] Document not found in availableDocuments:`, docId);
         }
     }
 
     async displayArticles(doc) {
+        console.log(`[LexFlow] Displaying articles for document:`, doc);
         const container = document.getElementById('articles-container');
+
+        if (!container) {
+            console.error('[LexFlow] Articles container not found in DOM');
+            return;
+        }
 
         // Show loading state
         container.innerHTML = `
@@ -355,25 +401,35 @@ class LexFlowApp {
         `;
 
         try {
+            console.log(`[LexFlow] Fetching articles for ${doc.title}...`);
             const articles = await fetchDocumentContent(doc);
+            console.log(`[LexFlow] Received ${articles.length} articles:`, articles);
+
             this.currentDocumentArticles = articles;
 
             if (articles.length === 0) {
+                console.warn('[LexFlow] No articles returned from fetchDocumentContent');
                 container.innerHTML = `
                     <div class="empty-state">
                         <p>No articles found for this document</p>
-                        <small>Try changing the document or search term</small>
+                        <small>Could not connect to or parse the document content</small>
+                        <button class="btn btn-secondary retry-articles-btn" style="margin-top: 1rem;">
+                            🔄 Retry
+                        </button>
                     </div>
                 `;
                 return;
             }
 
-            container.innerHTML = articles.map(article => `
+            const articlesHTML = articles.map(article => `
                 <div class="article-item" data-article-id="${article.id}">
                     <div class="article-number">${article.number}</div>
                     <div class="article-content">${article.content}</div>
                 </div>
             `).join('');
+
+            console.log(`[LexFlow] Rendering ${articles.length} articles`);
+            container.innerHTML = articlesHTML;
 
             // Add event listeners to article items
             container.querySelectorAll('.article-item').forEach(item => {
@@ -383,13 +439,15 @@ class LexFlowApp {
                 });
             });
 
+            console.log(`[LexFlow] Successfully displayed ${articles.length} articles`);
+
         } catch (error) {
-            console.error('Error loading articles:', error);
+            console.error('[LexFlow] Error loading articles:', error);
             container.innerHTML = `
                 <div class="empty-state">
-                    <p>Error loading articles</p>
+                    <p>Error loading articles: ${error.message}</p>
                     <small>Please try again</small>
-                    <button class="btn btn-secondary" onclick="window.app.displayArticles(window.app.currentDocument)" style="margin-top: 1rem;">
+                    <button class="btn btn-secondary retry-articles-btn" style="margin-top: 1rem;">
                         🔄 Retry
                     </button>
                 </div>
@@ -522,14 +580,14 @@ class LexFlowApp {
         const contextSummary = document.getElementById('context-summary');
         const placeholder = document.getElementById('ai-placeholder');
         const aiOutput = document.getElementById('ai-output');
-        
+
         if (contextSummary && this.selectedArticles.length > 0) {
             const summary = `${this.selectedArticles.length} article(s) selected from ${this.currentDocument?.title || 'document'}:\n\n` +
                 this.selectedArticles.map(article => `• ${article.number}`).join('\n');
 
             contextSummary.textContent = summary;
         }
-        
+
         // Show placeholder if no AI result is displayed
         if (placeholder && aiOutput) {
             if (aiOutput.style.display === 'none' || !aiOutput.style.display) {
@@ -691,20 +749,67 @@ class LexFlowApp {
         sendToCurationBtn.style.display = 'none';
 
         try {
-            // Check Chrome AI availability
+            // Check Chrome AI availability with functional test
             const aiStatus = await this.chromeAI.checkAvailability();
-            if (!aiStatus.prompt) {
-                throw new Error('Chrome AI is not available. Please check your Chrome settings.');
+            console.log('Chrome AI Status:', aiStatus);
+
+            if (!aiStatus.functional) {
+                throw new Error('Chrome AI is not available or not functional. Please check your Chrome Canary settings and experimental flags.');
             }
 
-            const systemPrompt = `You are a legal assistant specialized in legal analysis. 
-            Analyze the provided legal texts with technical precision and language appropriate for legal professionals.
-            Provide structured, practical, and well-founded analyses.`;
+            // Prepare context
+            const context = this.selectedArticles.map(article =>
+                `${article.number}: ${article.content}`
+            ).join('\n\n');
 
-            const userPrompt = document.getElementById('custom-prompt').value + '\n\nArticles for analysis:\n' + this.selectedContext;
+            const userPrompt = document.getElementById('custom-prompt').value;
+            const presetType = document.querySelector('.preset-btn.active')?.dataset.preset;
 
-            // Execute AI analysis
-            const result = await this.chromeAI.analyzeText(systemPrompt, userPrompt);
+            // Detect which AI provider to use
+            const aiDetection = this.chromeAI.detectAIProvider(userPrompt, presetType);
+            const { provider: aiProvider, options: aiOptions } = aiDetection;
+            console.log('🤖 Using AI Provider:', aiProvider, 'with options:', aiOptions);
+
+            let result;
+
+            // Always use LanguageModel (assistant) since Summarizer has GPU issues
+            let systemPrompt;
+
+            if (aiOptions.summaryMode) {
+                // Optimized prompt for summary tasks
+                systemPrompt = `You are a legal assistant specialized in creating executive summaries. 
+                Create a concise, well-structured executive summary of the provided legal texts.
+                Focus on key points, main rights and obligations, and practical implications.
+                Use clear, professional language suitable for legal professionals.
+                
+                Format your response as:
+                - Executive Summary (2-3 key points)
+                - Main Legal Provisions
+                - Practical Implications
+                - Key Takeaways`;
+            } else {
+                // Standard prompt for detailed analysis
+                systemPrompt = `You are a legal assistant specialized in legal analysis. 
+                Analyze the provided legal texts with technical precision and language appropriate for legal professionals.
+                Provide structured, practical, and well-founded analyses.
+                
+                Expected response format:
+                - Executive summary of main points
+                - Detailed legal analysis
+                - Practical implications
+                - Specific recommendations`;
+            }
+
+            const fullPrompt = userPrompt + '\n\nArticles for analysis:\n' + context;
+
+            // Add outputLanguage to options
+            const enhancedOptions = {
+                ...aiOptions,
+                outputLanguage: 'en'
+            };
+
+            console.log('Executing AI with enhanced options:', enhancedOptions);
+            result = await this.chromeAI.analyzeText(systemPrompt, fullPrompt, enhancedOptions);
 
             if (result.success) {
                 // Show result
@@ -725,44 +830,170 @@ class LexFlowApp {
                 // Save to history
                 await this.saveAnalysisToHistory(userPrompt, result.result);
 
-                this.toastSystem.show('Analysis completed successfully!', 'success');
+                this.toastSystem.show(`Analysis completed successfully! (${result.source})`, 'success');
             } else {
-                throw new Error(result.message || 'Error in AI analysis');
+                // Handle specific error types
+                console.error('AI analysis failed:', result);
+
+                let errorMessage = result.message || 'Error in AI analysis';
+                let toastType = 'error';
+
+                if (result.error === 'gpu_blocked') {
+                    errorMessage = 'GPU access blocked. Try restarting Chrome Canary or check system settings.';
+                    toastType = 'error';
+                } else if (result.error === 'session_destroyed') {
+                    errorMessage = 'AI session was destroyed. The system attempted automatic retry.';
+                    toastType = 'warning';
+                } else if (result.error === 'session_error') {
+                    errorMessage = 'AI session error. Try with shorter text or simpler wording.';
+                    toastType = 'warning';
+                } else if (result.error === 'rate_limited') {
+                    errorMessage = 'AI usage limit reached. Please wait a few minutes.';
+                    toastType = 'warning';
+                } else if (result.error === 'model_loading') {
+                    errorMessage = 'AI model is loading. Please try again in a moment.';
+                    toastType = 'info';
+                }
+
+                throw new Error(errorMessage);
             }
 
         } catch (error) {
             console.error('AI execution error:', error);
             thinkingDiv.style.display = 'none';
 
-            // Show info banner about Chrome AI availability
-            this.showAIUnavailableBanner();
+            // Show specific error information
+            this.showAIErrorBanner(error.message);
 
-            this.toastSystem.show('Chrome AI not available. Please check your Chrome settings.', 'warning', 8000);
+            // Show appropriate toast message
+            let toastMessage = 'Chrome AI error occurred.';
+            let toastType = 'error';
+
+            if (error.message.includes('GPU access blocked') || error.message.includes('GPU is blocked')) {
+                toastMessage = 'GPU access blocked. Try restarting Chrome Canary.';
+                toastType = 'error';
+            } else if (error.message.includes('session was destroyed') || error.message.includes('session destroyed')) {
+                toastMessage = 'AI session destroyed. System attempted automatic retry.';
+                toastType = 'warning';
+            } else if (error.message.includes('session error') || error.message.includes('shorter text')) {
+                toastMessage = 'Try with shorter text or simpler wording.';
+                toastType = 'warning';
+            } else if (error.message.includes('limit') || error.message.includes('quota')) {
+                toastMessage = 'AI usage limit reached. Please wait a few minutes.';
+                toastType = 'warning';
+            } else if (error.message.includes('not available') || error.message.includes('not functional')) {
+                toastMessage = 'Chrome AI not available. Please check your Chrome settings.';
+                toastType = 'warning';
+            }
+
+            this.toastSystem.show(toastMessage, toastType, 8000);
         }
     }
 
-    showAIUnavailableBanner() {
+    showAIErrorBanner(errorMessage) {
         const resultDiv = document.getElementById('ai-result');
         resultDiv.style.display = 'block';
 
-        document.getElementById('result-content').innerHTML = `
-            <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
-                <h4 style="color: #856404; margin: 0 0 0.5rem 0;">🔧 Chrome Built-in AI Not Available</h4>
-                <p style="color: #856404; margin: 0;">
-                    Chrome Built-in AI (Gemini Nano) is not available in your browser. 
-                    To use AI analysis features, please:
-                </p>
-                <ul style="color: #856404; margin: 0.5rem 0 0 1rem;">
-                    <li>Use Chrome Canary (version 120+)</li>
-                    <li>Enable the "Prompt API for Gemini Nano" flag</li>
-                    <li>Enable the "Built-in AI API" flag</li>
-                    <li>Restart your browser</li>
-                </ul>
-                <p style="color: #856404; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                    You can still use the "Send to Curation" feature to process your selected articles.
-                </p>
-            </div>
-        `;
+        let bannerContent = '';
+
+        if (errorMessage.includes('not available') || errorMessage.includes('not functional')) {
+            bannerContent = `
+                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #856404; margin: 0 0 0.5rem 0;">🔧 Chrome Built-in AI Not Available</h4>
+                    <p style="color: #856404; margin: 0;">
+                        Chrome Built-in AI (Gemini Nano) is not available in your browser. 
+                        To use AI analysis features, please:
+                    </p>
+                    <ul style="color: #856404; margin: 0.5rem 0 0 1rem;">
+                        <li>Use Chrome Canary (version 120+)</li>
+                        <li>Enable the "Prompt API for Gemini Nano" flag</li>
+                        <li>Enable the "Built-in AI API" flag</li>
+                        <li>Restart your browser</li>
+                    </ul>
+                    <p style="color: #856404; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        You can still use the "Send to Curation" feature to process your selected articles.
+                    </p>
+                </div>
+            `;
+        } else if (errorMessage.includes('GPU access blocked') || errorMessage.includes('GPU is blocked')) {
+            bannerContent = `
+                <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #721c24; margin: 0 0 0.5rem 0;">🚫 GPU Access Blocked</h4>
+                    <p style="color: #721c24; margin: 0;">
+                        The system cannot access the GPU required for AI processing. This can happen due to:
+                    </p>
+                    <ul style="color: #721c24; margin: 0.5rem 0 0 1rem;">
+                        <li>System security policies blocking GPU access</li>
+                        <li>Hardware limitations or driver issues</li>
+                        <li>Chrome security restrictions</li>
+                        <li>Other applications using the GPU</li>
+                    </ul>
+                    <p style="color: #721c24; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        <strong>Try:</strong> Restart Chrome Canary, close other GPU-intensive applications, or check system GPU settings.
+                    </p>
+                </div>
+            `;
+        } else if (errorMessage.includes('session was destroyed') || errorMessage.includes('session destroyed')) {
+            bannerContent = `
+                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #856404; margin: 0 0 0.5rem 0;">🔄 AI Session Destroyed</h4>
+                    <p style="color: #856404; margin: 0;">
+                        The AI session was unexpectedly destroyed. This can happen due to:
+                    </p>
+                    <ul style="color: #856404; margin: 0.5rem 0 0 1rem;">
+                        <li>Memory limitations or system resource constraints</li>
+                        <li>Chrome's automatic session cleanup</li>
+                        <li>System security policies</li>
+                    </ul>
+                    <p style="color: #856404; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        <strong>The system automatically attempted to retry.</strong> If the problem persists, try with shorter text or restart Chrome.
+                    </p>
+                </div>
+            `;
+        } else if (errorMessage.includes('session error') || errorMessage.includes('shorter text')) {
+            bannerContent = `
+                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #856404; margin: 0 0 0.5rem 0;">⚠️ AI Session Error</h4>
+                    <p style="color: #856404; margin: 0;">
+                        The AI encountered an error processing your request. This can happen due to:
+                    </p>
+                    <ul style="color: #856404; margin: 0.5rem 0 0 1rem;">
+                        <li>Text that is too long or complex</li>
+                        <li>Content that triggers safety filters</li>
+                        <li>Temporary AI session limits</li>
+                    </ul>
+                    <p style="color: #856404; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        <strong>Try:</strong> Select fewer articles, use simpler language, or wait a moment and try again.
+                    </p>
+                </div>
+            `;
+        } else if (errorMessage.includes('limit') || errorMessage.includes('quota')) {
+            bannerContent = `
+                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #856404; margin: 0 0 0.5rem 0;">⏱️ AI Usage Limit Reached</h4>
+                    <p style="color: #856404; margin: 0;">
+                        You've reached the AI usage limit for now. This is a temporary restriction.
+                    </p>
+                    <p style="color: #856404; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        <strong>Please wait a few minutes and try again.</strong> You can still use the "Send to Curation" feature.
+                    </p>
+                </div>
+            `;
+        } else {
+            bannerContent = `
+                <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #721c24; margin: 0 0 0.5rem 0;">❌ AI Error</h4>
+                    <p style="color: #721c24; margin: 0;">
+                        An unexpected error occurred: ${errorMessage}
+                    </p>
+                    <p style="color: #721c24; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        Please try again or use the "Send to Curation" feature to continue.
+                    </p>
+                </div>
+            `;
+        }
+
+        document.getElementById('result-content').innerHTML = bannerContent;
 
         // Show send to curation button even without AI result
         document.getElementById('send-to-curation').style.display = 'inline-block';
@@ -778,27 +1009,27 @@ class LexFlowApp {
 
     generateMockResult() {
         return `
-            <h4>📋 Resumo Executivo - Análise Jurídica</h4>
+            <h4>📋 Executive Summary - Legal Analysis</h4>
             
-            <p><strong>Artigos Analisados:</strong> ${this.selectedArticles.map(a => a.number).join(', ')}</p>
+            <p><strong>Articles Analyzed:</strong> ${this.selectedArticles.map(a => a.number).join(', ')}</p>
             
-            <h5>🎯 Principais Pontos:</h5>
+            <h5>🎯 Key Points:</h5>
             <ul>
-                <li><strong>Direitos Fundamentais:</strong> Os artigos estabelecem garantias constitucionais básicas, incluindo igualdade perante a lei e direitos sociais essenciais.</li>
-                <li><strong>Responsabilidade Civil:</strong> Há clara definição de responsabilidade por atos ilícitos e obrigação de reparar danos causados.</li>
-                <li><strong>Proteção ao Consumidor:</strong> Estabelece direitos básicos e responsabilidade objetiva dos fornecedores.</li>
+                <li><strong>Fundamental Rights:</strong> The articles establish basic constitutional guarantees, including equality before the law and essential social rights.</li>
+                <li><strong>Civil Liability:</strong> There is clear definition of liability for unlawful acts and obligation to repair caused damages.</li>
+                <li><strong>Consumer Protection:</strong> Establishes basic rights and objective liability of suppliers.</li>
             </ul>
             
-            <h5>⚖️ Implicações Práticas:</h5>
-            <p>A análise revela um sistema jurídico coerente que prioriza a proteção da dignidade humana e estabelece mecanismos claros de responsabilização. Para aplicação prática, recomenda-se:</p>
+            <h5>⚖️ Practical Implications:</h5>
+            <p>The analysis reveals a coherent legal system that prioritizes the protection of human dignity and establishes clear accountability mechanisms. For practical application, it is recommended to:</p>
             <ul>
-                <li>Verificar jurisprudência recente sobre interpretação dos dispositivos</li>
-                <li>Considerar princípios constitucionais na aplicação das normas</li>
-                <li>Atentar para prazos e procedimentos específicos</li>
+                <li>Check recent jurisprudence on interpretation of the provisions</li>
+                <li>Consider constitutional principles in the application of norms</li>
+                <li>Pay attention to specific deadlines and procedures</li>
             </ul>
             
-            <h5>🔍 Recomendações:</h5>
-            <p>Para casos concretos, sugere-se análise complementar da doutrina especializada e precedentes dos tribunais superiores.</p>
+            <h5>🔍 Recommendations:</h5>
+            <p>For concrete cases, complementary analysis of specialized doctrine and precedents from higher courts is suggested.</p>
         `;
     }
 
@@ -853,51 +1084,13 @@ class LexFlowApp {
                 copyBtn.classList.remove('copied');
             }, 2000);
 
-            this.toastSystem.show('Resultado copiado para a área de transferência!', 'success');
+            this.toastSystem.show('Result copied to clipboard!', 'success');
         } catch (error) {
-            this.toastSystem.show('Erro ao copiar. Tente selecionar o texto manualmente.', 'error');
+            this.toastSystem.show('Error copying. Try selecting the text manually.', 'error');
         }
     }
 
-    searchArticles(term) {
-        if (!this.currentDocument || !term) {
-            if (this.currentDocument) {
-                this.displayArticles(this.currentDocument);
-            }
-            return;
-        }
 
-        const filtered = this.currentDocumentArticles.filter(article =>
-            article.content.toLowerCase().includes(term.toLowerCase()) ||
-            article.number.toLowerCase().includes(term.toLowerCase())
-        );
-
-        const container = document.getElementById('articles-container');
-        if (filtered.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <p>No articles found for the search term</p>
-                    <small>Try a different search term</small>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = filtered.map(article => `
-            <div class="article-item ${this.selectedArticles.find(a => a.id === article.id) ? 'selected' : ''}" data-article-id="${article.id}">
-                <div class="article-number">${article.number}</div>
-                <div class="article-content">${article.content}</div>
-            </div>
-        `).join('');
-
-        // Add event listeners to filtered articles
-        container.querySelectorAll('.article-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                const articleId = e.currentTarget.dataset.articleId;
-                this.toggleArticle(e.currentTarget, articleId);
-            });
-        });
-    }
 
     addSampleContent() {
         const sampleItems = [
@@ -922,8 +1115,159 @@ class LexFlowApp {
         ];
 
         this.queueItems.push(...sampleItems);
+
+        // Add sample history items if none exist
+        if (this.historyItems.length === 0) {
+            const sampleHistory = [
+                {
+                    id: Date.now() + 100,
+                    timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+                    prompt: 'Analyze constitutional rights regarding privacy and search warrants...',
+                    result: 'The Fourth Amendment establishes fundamental protections against unreasonable searches...',
+                    articles: 'Amendment IV, Clause 1',
+                    type: 'ai_analysis'
+                },
+                {
+                    id: Date.now() + 200,
+                    timestamp: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+                    prompt: 'Compare due process clauses in different constitutional amendments...',
+                    result: 'The Due Process Clause appears in both the Fifth and Fourteenth Amendments...',
+                    articles: 'Amendment V, Amendment XIV Section 1',
+                    type: 'ai_analysis'
+                }
+            ];
+
+            this.historyItems.push(...sampleHistory);
+            this.updateHistoryView();
+        }
+
         this.updateCollectorView();
+        this.updateStats();
         this.toastSystem.show('Sample content added!', 'success');
+    }
+
+    /**
+     * Initialize sample data if no data exists (for demo purposes)
+     */
+    initializeSampleDataIfNeeded() {
+        // Add sample queue items if none exist
+        if (this.queueItems.length === 0) {
+            const sampleQueueItems = [
+                {
+                    id: Date.now(),
+                    title: 'Constitutional Analysis - Fourth Amendment',
+                    url: 'https://constitution.congress.gov/constitution/amendment-4/',
+                    content: 'Analysis of Fourth Amendment protections against unreasonable searches and seizures...',
+                    status: 'processed',
+                    timestamp: new Date(Date.now() - 86400000).toISOString(),
+                    category: 'Constitutional Law'
+                }
+            ];
+            this.queueItems.push(...sampleQueueItems);
+        }
+
+        // Add sample history items if none exist
+        if (this.historyItems.length === 0) {
+            const sampleHistory = [
+                {
+                    id: Date.now() + 100,
+                    timestamp: new Date(Date.now() - 3600000).toISOString(),
+                    prompt: 'Analyze Fourth Amendment privacy protections...',
+                    result: 'The Fourth Amendment establishes fundamental protections against unreasonable searches and seizures by government officials...',
+                    articles: 'Amendment IV',
+                    type: 'ai_analysis'
+                }
+            ];
+            this.historyItems.push(...sampleHistory);
+        }
+
+        console.log('[LexFlow] Sample data initialized:', {
+            queueItems: this.queueItems.length,
+            historyItems: this.historyItems.length
+        });
+    }
+
+    /**
+     * Reload documents from corpus (useful when settings change)
+     */
+    async reloadDocuments() {
+        try {
+            console.log('[LexFlow] Reloading documents from corpus...');
+            this.showDocumentsLoading(true);
+
+            // Clear current selection
+            this.currentDocument = null;
+            this.currentDocumentArticles = [];
+            this.selectedArticles = [];
+
+            // Clear articles container
+            const articlesContainer = document.getElementById('articles-container');
+            if (articlesContainer) {
+                articlesContainer.innerHTML = `
+                    <div class="empty-state">
+                        <p>Select a document to view its articles</p>
+                        <small>Choose from the available documents on the left</small>
+                    </div>
+                `;
+            }
+
+            // Fetch fresh documents
+            const documents = await fetchDocumentsFromCorpus();
+            this.availableDocuments = documents;
+            this.renderDocuments(documents);
+            this.showDocumentsLoading(false);
+
+            console.log(`[LexFlow] Reloaded ${documents.length} documents`);
+        } catch (error) {
+            console.error('[LexFlow] Error reloading documents:', error);
+            this.showDocumentsLoading(false);
+            this.showDocumentsError();
+        }
+    }
+
+    /**
+     * Load location from saved settings
+     */
+    async loadLocationFromSettings() {
+        try {
+            const settings = await getAllSettings();
+
+            // Set default values if not configured
+            if (!settings.country) {
+                const defaultSettings = {
+                    language: 'en-US',
+                    country: 'US',
+                    state: 'California',
+                    city: 'San Francisco',
+                    serverlessEndpoint: 'https://lexflow-corpus.webmaster-1d0.workers.dev'
+                };
+
+                await setSettings(defaultSettings);
+                console.log('[LexFlow] Default settings initialized');
+
+                // Use default settings for location
+                Object.assign(settings, defaultSettings);
+            }
+
+            // Build location string from settings
+            const locationParts = [];
+            if (settings.city) locationParts.push(settings.city);
+            if (settings.state) locationParts.push(settings.state);
+            if (settings.country) locationParts.push(settings.country);
+
+            const location = locationParts.join(', ');
+
+            if (location) {
+                document.getElementById('user-location').textContent = location;
+                console.log('[LexFlow] Location loaded from settings:', location);
+            } else {
+                // Fallback if something went wrong
+                document.getElementById('user-location').textContent = 'Location';
+            }
+        } catch (error) {
+            console.error('[LexFlow] Error loading location from settings:', error);
+            document.getElementById('user-location').textContent = 'Location';
+        }
     }
 
     updateCollectorView() {
@@ -1271,15 +1615,37 @@ class LexFlowApp {
     }
 
     updateStats() {
+        console.log('[LexFlow] Updating statistics:', {
+            historyItems: this.historyItems.length,
+            queueItems: this.queueItems.length,
+            processedItems: this.queueItems.filter(item => item.status === 'processed').length,
+            selectedArticles: this.selectedArticles.length
+        });
+
         // Update home stats
-        document.getElementById('stat-analyses').textContent = this.historyItems.length;
-        document.getElementById('stat-documents').textContent = this.queueItems.filter(item => item.status === 'processed').length;
-        document.getElementById('stat-time').textContent = (this.historyItems.length * 0.5).toFixed(1) + 'h';
+        const statAnalyses = document.getElementById('stat-analyses');
+        const statDocuments = document.getElementById('stat-documents');
+        const statTime = document.getElementById('stat-time');
+
+        if (statAnalyses) statAnalyses.textContent = this.historyItems.length;
+        if (statDocuments) statDocuments.textContent = this.queueItems.filter(item => item.status === 'processed').length;
+        if (statTime) statTime.textContent = (this.historyItems.length * 0.5).toFixed(1) + 'h';
 
         // Update history stats
-        document.getElementById('history-analyses').textContent = this.historyItems.length;
-        document.getElementById('history-documents').textContent = this.queueItems.filter(item => item.status === 'processed').length;
-        document.getElementById('history-articles').textContent = this.selectedArticles.length;
+        const historyAnalyses = document.getElementById('history-analyses');
+        const historyDocuments = document.getElementById('history-documents');
+        const historyArticles = document.getElementById('history-articles');
+        const historyAccuracy = document.getElementById('history-accuracy');
+
+        if (historyAnalyses) historyAnalyses.textContent = this.historyItems.length;
+        if (historyDocuments) historyDocuments.textContent = this.queueItems.filter(item => item.status === 'processed').length;
+        if (historyArticles) historyArticles.textContent = this.selectedArticles.length;
+
+        // Calculate AI accuracy (mock calculation based on successful analyses)
+        const accuracy = this.historyItems.length > 0 ? Math.min(95, 85 + (this.historyItems.length * 2)) : 0;
+        if (historyAccuracy) historyAccuracy.textContent = accuracy > 0 ? `${accuracy}%` : '{{n}}';
+
+        console.log('[LexFlow] Statistics updated successfully');
     }
 
     updateDocuments() {
@@ -1307,10 +1673,43 @@ class LexFlowApp {
                     }
                 });
 
+                // Listen for new captured content
+                chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+                    if (message?.type === "CONTENT_CAPTURED") {
+                        this.handleCapturedContent(message.data);
+                        sendResponse({ success: true });
+                    } else if (message?.type === "UPDATE_CAPTURE_QUEUE") {
+                        this.refreshCaptureQueue();
+                        sendResponse({ success: true });
+                    }
+                });
+
                 console.log('Extension integration setup complete');
             } catch (error) {
                 console.log('Extension integration not available:', error);
             }
+        }
+    }
+
+    /**
+     * Refresh capture queue from storage
+     */
+    async refreshCaptureQueue() {
+        try {
+            if (typeof chrome !== 'undefined' && chrome.runtime) {
+                chrome.runtime.sendMessage({ type: "GET_CAPTURED_CONTENT" }, (response) => {
+                    if (response?.success && response.data) {
+                        this.queueItems = response.data;
+                        this.updateCollectorView();
+                    }
+                });
+            } else {
+                // Fallback to local storage
+                this.queueItems = await this.dataManager.getQueueItems();
+                this.updateCollectorView();
+            }
+        } catch (error) {
+            console.error('Error refreshing capture queue:', error);
         }
     }
 
@@ -1450,21 +1849,24 @@ class LexFlowApp {
             return `${country}/Federal`;
         }
 
+        // If jurisdiction is already a string in correct format, return it
+        if (typeof jurisdiction === 'string' && jurisdiction.includes('/')) {
+            return jurisdiction;
+        }
+
         const parts = [];
-        
+
         // Use explicit country or derive from language
         const country = jurisdiction.country || languageToCountry[language] || 'US';
         parts.push(country.toUpperCase());
-        
+
         if (jurisdiction.state) {
             parts.push(jurisdiction.state.toUpperCase());
+        } else if (jurisdiction.level) {
+            parts.push(jurisdiction.level.charAt(0).toUpperCase() + jurisdiction.level.slice(1));
         } else {
             // Add "Federal" for country-level jurisdiction
             parts.push('Federal');
-        }
-        
-        if (jurisdiction.city) {
-            parts.push(jurisdiction.city);
         }
 
         return parts.join('/');
@@ -1558,11 +1960,13 @@ class LexFlowApp {
             showToast('Settings saved successfully', 'success');
             this.closeSettingsModal();
 
-            // Re-resolve corpus URL if language changed
+            // Re-resolve corpus URL and reload documents if language changed
             try {
                 await resolveCorpusBaseUrl();
+                // Reload documents to reflect language changes
+                await this.reloadDocuments();
             } catch (error) {
-                console.warn('Could not re-resolve corpus URL:', error);
+                console.warn('Could not re-resolve corpus URL or reload documents:', error);
             }
 
         } catch (error) {
@@ -1574,6 +1978,48 @@ class LexFlowApp {
 
 // Make app available globally for debugging
 window.app = null;
+
+// Debug utilities for Chrome AI testing
+window.debugChromeAI = {
+    async testAvailability() {
+        if (!window.app?.chromeAI) {
+            console.error('App not initialized or ChromeAI not available');
+            return;
+        }
+        
+        const availability = await window.app.chromeAI.checkAvailability();
+        console.log('=== Chrome AI Availability Test ===');
+        console.log('Functional:', availability.functional);
+        console.log('GPU Blocked:', window.app.chromeAI.gpuBlocked);
+        console.log('Full Status:', availability);
+        return availability;
+    },
+    
+    resetGPU() {
+        if (!window.app?.chromeAI) {
+            console.error('App not initialized or ChromeAI not available');
+            return;
+        }
+        
+        window.app.chromeAI.resetGPUState();
+        console.log('GPU state reset. Run testAvailability() to re-check.');
+    },
+    
+    async quickTest() {
+        console.log('=== Quick Chrome AI Test ===');
+        try {
+            const result = await window.app.chromeAI.analyzeText(
+                'You are a helpful assistant.',
+                'Say hello in one sentence.'
+            );
+            console.log('Test Result:', result);
+            return result;
+        } catch (error) {
+            console.error('Test Error:', error);
+            return { error: error.message };
+        }
+    }
+};
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {

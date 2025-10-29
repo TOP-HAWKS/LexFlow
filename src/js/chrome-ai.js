@@ -8,6 +8,8 @@ export class ChromeAI {
         this.available = null;
         this.retryCount = 0;
         this.maxRetries = 3;
+        this.gpuBlocked = false; // Track if GPU is permanently blocked
+        this.lastAvailabilityCheck = null;
     }
 
     /**
@@ -15,16 +17,122 @@ export class ChromeAI {
      * @returns {Object} Availability status for each API
      */
     async checkAvailability() {
-        if (this.available) return this.available;
+        // If GPU was blocked, always return non-functional status
+        if (this.gpuBlocked) {
+            return {
+                ai: false,
+                prompt: false,
+                summarizer: false,
+                languageModel: false,
+                assistant: false,
+                chromeVersion: this.getChromeVersion(),
+                isCanary: this.isChromeCanary(),
+                functional: false,
+                error: 'GPU access blocked - restart Chrome Canary required'
+            };
+        }
+
+        // Cache availability for 30 seconds to avoid repeated checks
+        const now = Date.now();
+        if (this.available && this.lastAvailabilityCheck && (now - this.lastAvailabilityCheck < 30000)) {
+            return this.available;
+        }
+
+        // Check for Chrome AI APIs - new global constructors
+        const hasAI = 'ai' in self;
+        const hasLanguageModel = 'LanguageModel' in self;
+        const hasSummarizer = 'Summarizer' in self;
+        const hasAssistant = hasAI && 'assistant' in self.ai;
 
         this.available = {
-            ai: 'ai' in self,
-            prompt: 'ai' in self && 'assistant' in self.ai,
-            summarizer: 'ai' in self && 'summarizer' in self.ai,
+            ai: hasAI,
+            prompt: hasLanguageModel || hasAssistant,
+            summarizer: hasSummarizer,
+            languageModel: hasLanguageModel,
+            assistant: hasAssistant,
             chromeVersion: this.getChromeVersion(),
-            isCanary: this.isChromeCanary()
+            isCanary: this.isChromeCanary(),
+            functional: false
         };
 
+        console.log('API Detection:', {
+            hasAI,
+            hasLanguageModel,
+            hasSummarizer,
+            hasAssistant,
+            globalLanguageModel: 'LanguageModel' in self,
+            globalSummarizer: 'Summarizer' in self,
+            selfAI: hasAI ? Object.keys(self.ai) : 'N/A'
+        });
+
+        // Test functional availability
+        if (this.available.prompt || this.available.summarizer) {
+            try {
+                // Check capabilities using new global APIs
+                let canUseLanguageModel = false;
+                let canUseSummarizer = false;
+
+                if (this.available.languageModel) {
+                    try {
+                        // Check availability using the correct API with outputLanguage
+                        const availability = await self.LanguageModel.availability({
+                            outputLanguage: 'en'
+                        });
+                        console.log('LanguageModel availability:', availability);
+
+                        if (availability === 'available') {
+                            // Try to create a test session
+                            await self.LanguageModel.create({
+                                systemPrompt: 'You are a test assistant.',
+                                outputLanguage: 'en'
+                            });
+                            canUseLanguageModel = true;
+                            console.log('LanguageModel test session created successfully');
+                        }
+                    } catch (capError) {
+                        console.warn('LanguageModel test failed:', capError);
+                        canUseLanguageModel = false;
+                    }
+                }
+
+                if (this.available.summarizer) {
+                    try {
+                        // Check availability using the correct API with outputLanguage
+                        const availability = await self.Summarizer.availability({
+                            outputLanguage: 'en'
+                        });
+                        console.log('Summarizer availability:', availability);
+
+                        if (availability === 'available') {
+                            // Try to create a test summarizer
+                            await self.Summarizer.create({
+                                outputLanguage: 'en'
+                            });
+                            canUseSummarizer = true;
+                            console.log('Summarizer test instance created successfully');
+                        }
+                    } catch (capError) {
+                        console.warn('Summarizer test failed:', capError);
+                        canUseSummarizer = false;
+                    }
+                }
+
+                // Set functional based on successful creation (don't test prompt execution)
+                if (canUseLanguageModel || canUseSummarizer) {
+                    this.available.functional = true;
+                    console.log('Chrome AI marked as functional - APIs created successfully');
+                } else {
+                    this.available.functional = false;
+                    this.available.error = 'No AI APIs are ready for use';
+                }
+            } catch (error) {
+                console.warn('Chrome AI functional test failed:', error);
+                this.available.functional = false;
+                this.available.error = error.message;
+            }
+        }
+
+        this.lastAvailabilityCheck = now;
         console.log('Chrome AI Availability:', this.available);
         return this.available;
     }
@@ -43,8 +151,8 @@ export class ChromeAI {
      * @returns {boolean} True if Chrome Canary
      */
     isChromeCanary() {
-        return navigator.userAgent.includes('Chrome') && 
-               (navigator.userAgent.includes('Canary') || 
+        return navigator.userAgent.includes('Chrome') &&
+            (navigator.userAgent.includes('Canary') ||
                 navigator.userAgent.includes('Dev') ||
                 parseInt(this.getChromeVersion()) >= 120);
     }
@@ -57,21 +165,68 @@ export class ChromeAI {
      */
     async createAssistant(systemPrompt, options = {}) {
         const availability = await this.checkAvailability();
-        
+
         if (!availability.prompt) {
-            throw new Error('Prompt API não disponível. Verifique se você está usando Chrome Canary com as flags habilitadas.');
+            throw new Error('Prompt API not available. Please verify you are using Chrome Canary with the required flags enabled.');
         }
 
+        // Ensure we always have outputLanguage
         const config = {
-            systemPrompt: systemPrompt,
+            systemPrompt: systemPrompt || 'You are a helpful assistant.',
+            outputLanguage: options.outputLanguage || 'en',
             ...options
         };
 
+        // Remove non-API options to avoid duplication
+        delete config.summaryMode;
+
         try {
-            return await self.ai.assistant.create(config);
+            // Check if GPU was previously blocked
+            if (this.gpuBlocked) {
+                throw new Error('GPU access was previously blocked. Please restart Chrome Canary to reset the AI system.');
+            }
+
+            // Use LanguageModel API if available
+            if (availability.languageModel) {
+                // Re-check availability before creating session
+                const langAvailability = await self.LanguageModel.availability({
+                    outputLanguage: config.outputLanguage
+                });
+
+                if (langAvailability === 'available') {
+                    console.log('Creating LanguageModel with config:', config);
+                    const session = await self.LanguageModel.create(config);
+
+                    // Store session reference to prevent garbage collection
+                    if (!this.activeSessions) {
+                        this.activeSessions = new Set();
+                    }
+                    this.activeSessions.add(session);
+
+                    return session;
+                } else {
+                    console.warn(`LanguageModel availability changed to: ${langAvailability}`);
+                    throw new Error(`LanguageModel not available: ${langAvailability}`);
+                }
+            }
+
+            if (availability.assistant) {
+                return await self.ai.assistant.create(config);
+            }
+
+            throw new Error('No compatible AI API available or ready');
         } catch (error) {
             console.error('Error creating AI assistant:', error);
-            throw new Error(`Erro ao criar assistente de IA: ${error.message}`);
+            console.error('Config used:', config);
+
+            // Handle specific GPU blocked error
+            if (error.message.includes('GPU is blocked') || error.name === 'NotAllowedError') {
+                this.gpuBlocked = true; // Mark GPU as permanently blocked
+                this.available = null; // Reset availability cache
+                throw new Error('GPU access is blocked. This may be due to system security settings or hardware limitations. Try restarting Chrome Canary or check system GPU settings.');
+            }
+
+            throw new Error(`Error creating AI assistant: ${error.message}`);
         }
     }
 
@@ -82,23 +237,32 @@ export class ChromeAI {
      */
     async createSummarizer(options = {}) {
         const availability = await this.checkAvailability();
-        
+
         if (!availability.summarizer) {
-            throw new Error('Summarizer API não disponível. Verifique se você está usando Chrome Canary com as flags habilitadas.');
+            throw new Error('Summarizer API not available. Please verify you are using Chrome Canary with the required flags enabled.');
         }
 
         const config = {
-            type: 'tl;dr', // 'key-points', 'teaser', 'headline'
+            type: 'key-points', // 'key-points', 'teaser', 'headline'
             format: 'markdown', // 'plain-text'
             length: 'medium', // 'short', 'long'
+            outputLanguage: 'en', // Required - 'en', 'es', 'ja'
             ...options
         };
 
         try {
-            return await self.ai.summarizer.create(config);
+            // Check availability first
+            const sumAvailability = await self.Summarizer.availability({
+                outputLanguage: 'en'
+            });
+            if (sumAvailability !== 'available') {
+                throw new Error(`Summarizer not available: ${sumAvailability}`);
+            }
+
+            return await self.Summarizer.create(config);
         } catch (error) {
             console.error('Error creating AI summarizer:', error);
-            throw new Error(`Erro ao criar resumidor de IA: ${error.message}`);
+            throw new Error(`Error creating AI summarizer: ${error.message}`);
         }
     }
 
@@ -110,21 +274,96 @@ export class ChromeAI {
      * @returns {Object} Analysis result
      */
     async analyzeText(systemPrompt, userText, options = {}) {
+        let assistant = null;
+
         try {
-            const assistant = await this.createAssistant(systemPrompt, options);
-            const result = await assistant.prompt(userText);
-            
-            // Reset retry count on success
-            this.retryCount = 0;
-            
-            return {
-                success: true,
-                result: result,
-                source: 'chrome-ai',
-                timestamp: new Date().toISOString()
-            };
+            console.log('Starting analyzeText with:', { systemPrompt: systemPrompt?.substring(0, 100), userText: userText?.substring(0, 100), options });
+
+            // Validate inputs first
+            if (!userText || userText.trim().length === 0) {
+                throw new Error('User text is required and cannot be empty');
+            }
+
+            // Retry logic for session creation and prompt execution
+            let lastError = null;
+            const maxRetries = 3;
+
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    console.log(`Attempt ${attempt}/${maxRetries}: Creating assistant...`);
+                    assistant = await this.createAssistant(systemPrompt, options);
+                    console.log('Assistant created successfully');
+
+                    // Add a small delay to ensure session is ready
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    console.log('Sending prompt to assistant...');
+                    const result = await assistant.prompt(userText);
+                    console.log('Prompt completed successfully, result length:', result?.length);
+
+                    // Reset retry count on success
+                    this.retryCount = 0;
+
+                    return {
+                        success: true,
+                        result: result,
+                        source: 'chrome-ai',
+                        timestamp: new Date().toISOString()
+                    };
+
+                } catch (attemptError) {
+                    console.warn(`Attempt ${attempt} failed:`, attemptError.message);
+                    lastError = attemptError;
+
+                    // If GPU is blocked or was previously blocked, don't retry
+                    if (attemptError.message.includes('GPU is blocked') ||
+                        attemptError.name === 'NotAllowedError' ||
+                        attemptError.message.includes('GPU access was previously blocked') ||
+                        this.gpuBlocked) {
+                        console.error('GPU blocked detected, stopping retries');
+                        throw attemptError;
+                    }
+
+                    // If LanguageModel becomes unavailable after first attempt, likely GPU issue
+                    if (attemptError.message.includes('LanguageModel not available: unavailable') && attempt > 1) {
+                        console.error('LanguageModel became unavailable, likely GPU issue');
+                        this.gpuBlocked = true;
+                        throw new Error('GPU access appears to be blocked after initial failure. Please restart Chrome Canary.');
+                    }
+
+                    // If session was destroyed, try creating a new one
+                    if (attemptError.message.includes('session has been destroyed') && attempt < maxRetries) {
+                        console.log('Session destroyed, will retry with new session...');
+                        assistant = null;
+                        await new Promise(resolve => setTimeout(resolve, 500)); // Wait before retry
+                        continue;
+                    }
+
+                    // For other errors, retry with exponential backoff
+                    if (attempt < maxRetries) {
+                        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+                        console.log(`Waiting ${delay}ms before retry...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+
+            // If all retries failed, throw the last error
+            throw lastError || new Error('All retry attempts failed');
+
         } catch (error) {
+            console.error('Error in analyzeText:', error);
+            console.error('Error details:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
             return this.handleAIError(error, 'analyze');
+        } finally {
+            // Clean up session reference if needed
+            if (assistant && this.activeSessions) {
+                this.activeSessions.delete(assistant);
+            }
         }
     }
 
@@ -138,9 +377,9 @@ export class ChromeAI {
         try {
             const summarizer = await this.createSummarizer(options);
             const result = await summarizer.summarize(text);
-            
+
             this.retryCount = 0;
-            
+
             return {
                 success: true,
                 result: result,
@@ -159,32 +398,59 @@ export class ChromeAI {
      * @returns {Object} Error response
      */
     handleAIError(error, operation) {
-        console.error(`Erro na operação ${operation}:`, error);
+        console.error(`Error in ${operation} operation:`, error);
 
         let errorType = 'unknown';
-        let message = 'Erro inesperado na IA. Tente novamente.';
+        let message = 'Unexpected AI error. Please try again.';
         let fallback = 'retry';
         let retryable = true;
 
-        if (error.message.includes('not available') || error.message.includes('undefined')) {
+        // Detailed error analysis
+        const errorMessage = error.message || '';
+        const errorName = error.name || '';
+
+        if (errorMessage.includes('not available') || errorMessage.includes('undefined')) {
             errorType = 'ai_not_available';
-            message = 'Chrome AI não está disponível. Verifique as configurações do Chrome Canary e as flags experimentais.';
+            message = 'Chrome AI is not available. Please check Chrome Canary settings and experimental flags.';
             fallback = 'setup_required';
             retryable = false;
-        } else if (error.message.includes('quota') || error.message.includes('limit')) {
+        } else if (errorMessage.includes('quota') || errorMessage.includes('limit') || errorMessage.includes('rate')) {
             errorType = 'rate_limited';
-            message = 'Limite de uso da IA atingido. Tente novamente em alguns minutos.';
+            message = 'AI usage limit reached. Please try again in a few minutes.';
             fallback = 'retry_later';
             retryable = true;
-        } else if (error.message.includes('model')) {
+        } else if (errorMessage.includes('model') || errorMessage.includes('download')) {
             errorType = 'model_loading';
-            message = 'Modelo de IA não disponível. O modelo pode ainda estar sendo baixado.';
+            message = 'AI model not available. The model may still be downloading.';
             fallback = 'retry_later';
             retryable = true;
-        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
             errorType = 'network_error';
-            message = 'Erro de rede. Verifique sua conexão.';
+            message = 'Network error. Please check your connection.';
             fallback = 'retry';
+            retryable = true;
+        } else if (errorMessage.includes('GPU is blocked') ||
+            errorName === 'NotAllowedError' ||
+            errorMessage.includes('GPU access was previously blocked') ||
+            errorMessage.includes('GPU access appears to be blocked')) {
+            errorType = 'gpu_blocked';
+            message = 'GPU access is blocked. This may be due to system security settings, hardware limitations, or Chrome security policies. Restart Chrome Canary to reset the AI system.';
+            fallback = 'restart_required';
+            retryable = false;
+        } else if (errorMessage.includes('session has been destroyed') || errorMessage.includes('session') && errorMessage.includes('destroyed')) {
+            errorType = 'session_destroyed';
+            message = 'AI session was destroyed. This can happen due to memory limits or system policies. The system will automatically retry.';
+            fallback = 'auto_retry';
+            retryable = true;
+        } else if (errorName === 'UnknownError' || errorMessage.includes('generic failures')) {
+            errorType = 'session_error';
+            message = 'AI session error. This may be due to prompt length, content filtering, or session limits. Try with shorter text or different wording.';
+            fallback = 'retry_shorter';
+            retryable = true;
+        } else if (errorMessage.includes('prompt') || errorMessage.includes('input')) {
+            errorType = 'prompt_error';
+            message = 'Invalid prompt or input. Please check your text and try again.';
+            fallback = 'retry_different';
             retryable = true;
         }
 
@@ -194,6 +460,8 @@ export class ChromeAI {
             message: message,
             fallback: fallback,
             retryable: retryable,
+            originalError: errorMessage,
+            errorName: errorName,
             timestamp: new Date().toISOString()
         };
     }
@@ -213,8 +481,8 @@ export class ChromeAI {
             // Test Prompt API
             if (results.availability.prompt) {
                 const promptResult = await this.analyzeText(
-                    'Você é um assistente útil.',
-                    'Diga olá em português.'
+                    'You are a helpful assistant.',
+                    'Say hello in English.'
                 );
                 results.promptTest = {
                     success: promptResult.success,
@@ -225,7 +493,7 @@ export class ChromeAI {
             // Test Summarizer API
             if (results.availability.summarizer) {
                 const summaryResult = await this.summarizeText(
-                    'Este é um texto longo que precisa ser resumido para testar a funcionalidade do resumidor de IA integrado ao Chrome. O texto contém várias informações importantes que devem ser condensadas em um resumo conciso e útil.'
+                    'This is a long text that needs to be summarized to test the functionality of the AI summarizer integrated into Chrome. The text contains various important information that should be condensed into a concise and useful summary.'
                 );
                 results.summarizerTest = {
                     success: summaryResult.success,
@@ -241,23 +509,59 @@ export class ChromeAI {
     }
 
     /**
+     * Detect which AI provider to use based on prompt and preset
+     * @param {string} userPrompt - User prompt text
+     * @param {string} presetType - Preset type (resumo, analise, etc.)
+     * @returns {Object} Provider detection result
+     */
+    detectAIProvider(userPrompt, presetType) {
+        // Default to assistant for complex analysis
+        let provider = 'assistant';
+        let options = {};
+
+        // Always use assistant (LanguageModel) since Summarizer has GPU issues
+        // Even for summaries, use LanguageModel with appropriate prompt
+        if (presetType === 'executive-summary' ||
+            presetType === 'resumo' ||
+            userPrompt.toLowerCase().includes('resumo') ||
+            userPrompt.toLowerCase().includes('summary')) {
+            provider = 'assistant'; // Use LanguageModel instead of Summarizer
+            options = {
+                summaryMode: true // Flag to indicate this is a summary request
+            };
+        }
+
+        return { provider, options };
+    }
+
+    /**
+     * Reset GPU blocked state (useful for testing or after Chrome restart)
+     */
+    resetGPUState() {
+        this.gpuBlocked = false;
+        this.available = null;
+        this.lastAvailabilityCheck = null;
+        console.log('GPU state reset - will re-check availability on next request');
+    }
+
+    /**
      * Get setup instructions for Chrome AI
      * @returns {Object} Setup instructions
      */
     getSetupInstructions() {
         return {
-            title: 'Configuração do Chrome AI (Gemini Nano)',
+            title: 'Chrome AI Setup (Gemini Nano)',
             steps: [
                 {
                     step: 1,
-                    title: 'Instalar Chrome Canary',
-                    description: 'Baixe e instale o Chrome Canary da página oficial do Google.',
+                    title: 'Install Chrome Canary',
+                    description: 'Download and install Chrome Canary from the official Google page.',
                     url: 'https://www.google.com/chrome/canary/'
                 },
                 {
                     step: 2,
-                    title: 'Habilitar Flags Experimentais',
-                    description: 'Acesse chrome://flags e habilite as seguintes flags:',
+                    title: 'Enable Experimental Flags',
+                    description: 'Go to chrome://flags and enable the following flags:',
                     flags: [
                         'chrome://flags/#prompt-api-for-gemini-nano',
                         'chrome://flags/#summarization-api-for-gemini-nano',
@@ -266,27 +570,27 @@ export class ChromeAI {
                 },
                 {
                     step: 3,
-                    title: 'Reiniciar o Navegador',
-                    description: 'Reinicie o Chrome Canary após habilitar as flags.'
+                    title: 'Restart Browser',
+                    description: 'Restart Chrome Canary after enabling the flags.'
                 },
                 {
                     step: 4,
-                    title: 'Aguardar Download do Modelo',
-                    description: 'O modelo Gemini Nano será baixado automaticamente na primeira execução.'
+                    title: 'Wait for Model Download',
+                    description: 'The Gemini Nano model will be downloaded automatically on first run.'
                 }
             ],
             troubleshooting: [
                 {
-                    problem: 'APIs não disponíveis',
-                    solution: 'Verifique se está usando Chrome Canary versão 120+ e se as flags estão habilitadas.'
+                    problem: 'APIs not available',
+                    solution: 'Verify you are using Chrome Canary version 120+ and the flags are enabled.'
                 },
                 {
-                    problem: 'Modelo não carrega',
-                    solution: 'Aguarde alguns minutos para o download do modelo ou reinicie o navegador.'
+                    problem: 'Model does not load',
+                    solution: 'Wait a few minutes for the model download or restart the browser.'
                 },
                 {
-                    problem: 'Erros de quota',
-                    solution: 'Aguarde alguns minutos antes de tentar novamente.'
+                    problem: 'Quota errors',
+                    solution: 'Wait a few minutes before trying again.'
                 }
             ]
         };

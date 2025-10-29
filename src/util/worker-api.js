@@ -21,7 +21,7 @@ export async function submitToCorpusPR({ title, markdown, metadata }) {
     title,
     markdown,
     metadata: {
-      jurisdiction: metadata.jurisdiction || 'unknown',
+      jurisdiction: metadata.jurisdiction || 'US/Federal',
       language: metadata.language || 'en-US',
       doc_type: metadata.doc_type || 'general',
       file_slug: metadata.file_slug || slugify(title),
@@ -46,7 +46,9 @@ export async function submitToCorpusPR({ title, markdown, metadata }) {
     const data = await response.json().catch(() => ({}));
     
     if (!response.ok || data.ok === false) {
-      throw new Error(data.error || `Worker returned ${response.status}`);
+      const errorMsg = data.error || `HTTP ${response.status}: ${response.statusText}`;
+      console.error('[LexFlow] Worker error details:', { status: response.status, data, endpoint });
+      throw new Error(errorMsg);
     }
     
     console.log('[LexFlow] Corpus submission successful:', data);

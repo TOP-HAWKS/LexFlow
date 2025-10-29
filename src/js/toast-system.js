@@ -97,7 +97,7 @@ export class ToastSystem {
         const closeBtn = document.createElement('button');
         closeBtn.className = 'toast-close';
         closeBtn.innerHTML = '×';
-        closeBtn.setAttribute('aria-label', 'Fechar notificação');
+        closeBtn.setAttribute('aria-label', 'Close notification');
         closeBtn.addEventListener('click', () => {
             this.remove(toast);
         });

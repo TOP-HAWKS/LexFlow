@@ -26,11 +26,14 @@ export default {
       const { title, markdown, metadata } = await request.json();
 
       if (!title || !markdown || !metadata?.language) {
-        return new Response(JSON.stringify({ ok: false, error: "Missing fields" }), {
+        console.error('Missing required fields:', { title: !!title, markdown: !!markdown, language: metadata?.language });
+        return new Response(JSON.stringify({ ok: false, error: "Missing required fields: title, markdown, metadata.language" }), {
           status: 400,
           headers: { "Content-Type": "application/json", ...CORS }
         });
       }
+
+      console.log('Processing request:', { title, jurisdiction: metadata.jurisdiction, language: metadata.language });
 
       const token = env.GITHUB_TOKEN;
       if (!token) throw new Error("Missing GITHUB_TOKEN in environment");
@@ -42,17 +45,27 @@ export default {
       const fileSlug = metadata.file_slug || slugify(title);
       const lang = metadata.language || "en-US";
       
-      // Map language to country code
-      const languageToCountry = {
-        'pt-BR': 'BR',
-        'en-US': 'US', 
-        'es-ES': 'ES'
-      };
+      // Parse jurisdiction properly (format: "US/Federal" or "BR/RS" etc)
+      let country, level;
+      if (metadata.jurisdiction && metadata.jurisdiction.includes('/')) {
+        const parts = metadata.jurisdiction.split('/');
+        country = parts[0].toLowerCase();
+        level = parts[1].toLowerCase();
+      } else {
+        // Fallback: derive country from language
+        const languageToCountry = {
+          'pt-BR': 'br',
+          'en-US': 'us', 
+          'es-ES': 'es'
+        };
+        country = languageToCountry[lang] || 'us';
+        level = 'federal';
+      }
       
-      const country = languageToCountry[lang] || 'US';
-      const level = metadata.jurisdiction?.includes('/') ? metadata.jurisdiction.split('/')[1].toLowerCase() : 'federal';
-      const dir = `${lang}/${country}/${level}/constitution`;
+      const dir = `contents/${lang}/${country}/${level}`;
       const path = `${dir}/${fileSlug}.md`;
+      
+      console.log('Constructed path:', { path, dir, fileSlug, country, level, lang });
 
       // 1️⃣ Get base branch SHA
       const base = await ghGET(env, `/repos/${owner}/${repo}/git/ref/heads/${baseBranch}`);
@@ -65,13 +78,29 @@ export default {
         sha: baseSha
       });
 
-      // 3️⃣ Add file
+      // 3️⃣ Check if file exists and add/update file
       const contentB64 = btoaUnicode(markdown);
-      await ghPUT(env, `/repos/${owner}/${repo}/contents/${path}`, {
-        message: `chore(lexflow): add ${fileSlug}`,
+      let fileSha = null;
+      
+      try {
+        // Try to get existing file
+        const existingFile = await ghGET(env, `/repos/${owner}/${repo}/contents/${path}?ref=${branch}`);
+        fileSha = existingFile.sha;
+      } catch (error) {
+        // File doesn't exist, that's fine
+      }
+      
+      const filePayload = {
+        message: fileSha ? `chore(lexflow): update ${fileSlug}` : `chore(lexflow): add ${fileSlug}`,
         content: contentB64,
         branch
-      });
+      };
+      
+      if (fileSha) {
+        filePayload.sha = fileSha;
+      }
+      
+      await ghPUT(env, `/repos/${owner}/${repo}/contents/${path}`, filePayload);
 
       // 4️⃣ Create PR
       const pr = await ghPOST(env, `/repos/${owner}/${repo}/pulls`, {
