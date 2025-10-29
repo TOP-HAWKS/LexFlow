@@ -17,10 +17,10 @@ export class ChromeAI {
     async checkAvailability() {
         if (this.available) return this.available;
 
-        // Check for new Chrome AI APIs
+        // Check for Chrome AI APIs - new global constructors
         const hasAI = 'ai' in self;
-        const hasLanguageModel = hasAI && 'languageModel' in self.ai;
-        const hasSummarizer = hasAI && 'summarizer' in self.ai;
+        const hasLanguageModel = 'LanguageModel' in self;
+        const hasSummarizer = 'Summarizer' in self;
         const hasAssistant = hasAI && 'assistant' in self.ai;
 
         this.available = {
@@ -39,58 +39,65 @@ export class ChromeAI {
             hasLanguageModel,
             hasSummarizer,
             hasAssistant,
+            globalLanguageModel: 'LanguageModel' in self,
+            globalSummarizer: 'Summarizer' in self,
             selfAI: hasAI ? Object.keys(self.ai) : 'N/A'
         });
 
         // Test functional availability
         if (this.available.prompt || this.available.summarizer) {
             try {
-                // Check capabilities first
+                // Check capabilities using new global APIs
                 let canUseLanguageModel = false;
                 let canUseSummarizer = false;
 
                 if (this.available.languageModel) {
                     try {
-                        const capabilities = await self.ai.languageModel.capabilities();
-                        console.log('LanguageModel capabilities:', capabilities);
-                        canUseLanguageModel = capabilities.available === 'readily';
+                        // Check availability using the correct API with outputLanguage
+                        const availability = await self.LanguageModel.availability({
+                            outputLanguage: 'en'
+                        });
+                        console.log('LanguageModel availability:', availability);
+
+                        if (availability === 'available') {
+                            // Try to create a test session
+                            const testSession = await self.LanguageModel.create({
+                                systemPrompt: 'You are a test assistant.',
+                                outputLanguage: 'en'
+                            });
+                            canUseLanguageModel = true;
+                            console.log('LanguageModel test session created successfully');
+                        }
                     } catch (capError) {
-                        console.warn('LanguageModel capabilities check failed:', capError);
+                        console.warn('LanguageModel test failed:', capError);
+                        canUseLanguageModel = false;
                     }
                 }
 
                 if (this.available.summarizer) {
                     try {
-                        const capabilities = await self.ai.summarizer.capabilities();
-                        console.log('Summarizer capabilities:', capabilities);
-                        canUseSummarizer = capabilities.available === 'readily';
+                        // Check availability using the correct API
+                        const availability = await self.Summarizer.availability();
+                        console.log('Summarizer availability:', availability);
+
+                        if (availability === 'available') {
+                            // Try to create a test summarizer
+                            const testSummarizer = await self.Summarizer.create({
+                                outputLanguage: 'en'
+                            });
+                            canUseSummarizer = true;
+                            console.log('Summarizer test instance created successfully');
+                        }
                     } catch (capError) {
-                        console.warn('Summarizer capabilities check failed:', capError);
+                        console.warn('Summarizer test failed:', capError);
+                        canUseSummarizer = false;
                     }
                 }
 
-                // Test functional availability based on capabilities
-                if (canUseLanguageModel) {
-                    const session = await self.ai.languageModel.create({
-                        systemPrompt: 'You are a test assistant.',
-                        outputLanguage: 'en'
-                    });
-                    await session.prompt('Hello');
+                // Set functional based on successful creation (don't test prompt execution)
+                if (canUseLanguageModel || canUseSummarizer) {
                     this.available.functional = true;
-                } else if (canUseSummarizer) {
-                    const testSummarizer = await self.ai.summarizer.create({
-                        outputLanguage: 'en'
-                    });
-                    await testSummarizer.summarize('This is a test text for summarization.');
-                    this.available.functional = true;
-                } else if (this.available.assistant) {
-                    // Fallback to legacy Assistant API
-                    const testAssistant = await self.ai.assistant.create({
-                        systemPrompt: 'You are a test assistant.',
-                        outputLanguage: 'en'
-                    });
-                    await testAssistant.prompt('Hello');
-                    this.available.functional = true;
+                    console.log('Chrome AI marked as functional - APIs created successfully');
                 } else {
                     this.available.functional = false;
                     this.available.error = 'No AI APIs are ready for use';
@@ -146,11 +153,13 @@ export class ChromeAI {
         };
 
         try {
-            // Check capabilities and use appropriate API
+            // Use LanguageModel API if available
             if (availability.languageModel) {
-                const capabilities = await self.ai.languageModel.capabilities();
-                if (capabilities.available === 'readily') {
-                    return await self.ai.languageModel.create(config);
+                const langAvailability = await self.LanguageModel.availability();
+                if (langAvailability === 'available') {
+                    return await self.LanguageModel.create(config);
+                } else {
+                    throw new Error(`LanguageModel not available: ${langAvailability}`);
                 }
             }
 
@@ -186,13 +195,13 @@ export class ChromeAI {
         };
 
         try {
-            // Check capabilities first
-            const capabilities = await self.ai.summarizer.capabilities();
-            if (capabilities.available !== 'readily') {
-                throw new Error(`Summarizer not ready: ${capabilities.available}`);
+            // Check availability first
+            const sumAvailability = await self.Summarizer.availability();
+            if (sumAvailability !== 'available') {
+                throw new Error(`Summarizer not available: ${sumAvailability}`);
             }
 
-            return await self.ai.summarizer.create(config);
+            return await self.Summarizer.create(config);
         } catch (error) {
             console.error('Error creating AI summarizer:', error);
             throw new Error(`Error creating AI summarizer: ${error.message}`);
@@ -348,16 +357,15 @@ export class ChromeAI {
         let provider = 'assistant';
         let options = {};
 
-        // Use summarizer for summary-related tasks
+        // Always use assistant (LanguageModel) since Summarizer has GPU issues
+        // Even for summaries, use LanguageModel with appropriate prompt
         if (presetType === 'executive-summary' ||
             presetType === 'resumo' ||
             userPrompt.toLowerCase().includes('resumo') ||
             userPrompt.toLowerCase().includes('summary')) {
-            provider = 'summarizer';
+            provider = 'assistant'; // Use LanguageModel instead of Summarizer
             options = {
-                type: 'key-points',
-                format: 'markdown',
-                length: 'medium'
+                summaryMode: true // Flag to indicate this is a summary request
             };
         }
 

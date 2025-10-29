@@ -772,17 +772,24 @@ class LexFlowApp {
 
             let result;
 
-            if (aiProvider === 'summarizer') {
-                // Use Summarizer API for summaries
-                result = await this.chromeAI.summarizeText(context, {
-                    type: 'key-points',
-                    format: 'markdown',
-                    length: 'medium',
-                    ...aiOptions
-                });
+            // Always use LanguageModel (assistant) since Summarizer has GPU issues
+            let systemPrompt;
+            
+            if (aiOptions.summaryMode) {
+                // Optimized prompt for summary tasks
+                systemPrompt = `You are a legal assistant specialized in creating executive summaries. 
+                Create a concise, well-structured executive summary of the provided legal texts.
+                Focus on key points, main rights and obligations, and practical implications.
+                Use clear, professional language suitable for legal professionals.
+                
+                Format your response as:
+                - Executive Summary (2-3 key points)
+                - Main Legal Provisions
+                - Practical Implications
+                - Key Takeaways`;
             } else {
-                // Use Assistant API for complex analysis
-                const systemPrompt = `You are a legal assistant specialized in legal analysis. 
+                // Standard prompt for detailed analysis
+                systemPrompt = `You are a legal assistant specialized in legal analysis. 
                 Analyze the provided legal texts with technical precision and language appropriate for legal professionals.
                 Provide structured, practical, and well-founded analyses.
                 
@@ -791,10 +798,10 @@ class LexFlowApp {
                 - Detailed legal analysis
                 - Practical implications
                 - Specific recommendations`;
-
-                const fullPrompt = userPrompt + '\n\nArticles for analysis:\n' + context;
-                result = await this.chromeAI.analyzeText(systemPrompt, fullPrompt, aiOptions);
             }
+
+            const fullPrompt = userPrompt + '\n\nArticles for analysis:\n' + context;
+            result = await this.chromeAI.analyzeText(systemPrompt, fullPrompt, aiOptions);
 
             if (result.success) {
                 // Show result
