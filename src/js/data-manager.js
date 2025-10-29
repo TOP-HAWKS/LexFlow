@@ -8,8 +8,8 @@ export class DataManager {
         this.storageKey = 'lexflow-data';
         this.data = {
             userData: {
-                name: 'Dr. Maria Silva',
-                location: 'Porto Alegre, RS'
+                name: '',
+                location: ''
             },
             history: [],
             queueItems: [],
@@ -23,6 +23,7 @@ export class DataManager {
     async init() {
         try {
             await this.loadData();
+            await this.cleanMockupData(); // Clean any mockup data
             this.setupExtensionListener();
             console.log('Data Manager initialized');
         } catch (error) {
@@ -38,6 +39,17 @@ export class DataManager {
             const savedData = localStorage.getItem(this.storageKey);
             if (savedData) {
                 const parsed = JSON.parse(savedData);
+                
+                // Clean any mockup data that might be in saved data
+                if (parsed.userData) {
+                    if (parsed.userData.name === 'Dr. Maria Silva') {
+                        parsed.userData.name = '';
+                    }
+                    if (parsed.userData.location === 'Porto Alegre, RS') {
+                        parsed.userData.location = '';
+                    }
+                }
+                
                 this.data = { ...this.data, ...parsed };
             }
         } catch (error) {
@@ -156,7 +168,7 @@ export class DataManager {
      * @param {string} city - City name
      * @returns {Array} Available documents
      */
-    getDocuments(country = 'br', state = 'rs', city = 'porto-alegre') {
+    getDocuments(country = '', state = '', city = '') {
         const documents = {
             br: {
                 federal: [
@@ -389,14 +401,34 @@ export class DataManager {
     async clearAllData() {
         this.data = {
             userData: {
-                name: 'Dr. Maria Silva',
-                location: 'Porto Alegre, RS'
+                name: '',
+                location: ''
             },
             history: [],
             queueItems: [],
             settings: {}
         };
         localStorage.removeItem(this.storageKey);
+    }
+
+    /**
+     * Clean mockup data from current data and localStorage
+     */
+    async cleanMockupData() {
+        // Clean current data
+        if (this.data.userData) {
+            if (this.data.userData.name === 'Dr. Maria Silva') {
+                this.data.userData.name = '';
+            }
+            if (this.data.userData.location === 'Porto Alegre, RS') {
+                this.data.userData.location = '';
+            }
+        }
+        
+        // Save cleaned data
+        await this.saveData();
+        
+        console.log('Mockup data cleaned');
     }
 
     /**
