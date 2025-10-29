@@ -1979,6 +1979,48 @@ class LexFlowApp {
 // Make app available globally for debugging
 window.app = null;
 
+// Debug utilities for Chrome AI testing
+window.debugChromeAI = {
+    async testAvailability() {
+        if (!window.app?.chromeAI) {
+            console.error('App not initialized or ChromeAI not available');
+            return;
+        }
+        
+        const availability = await window.app.chromeAI.checkAvailability();
+        console.log('=== Chrome AI Availability Test ===');
+        console.log('Functional:', availability.functional);
+        console.log('GPU Blocked:', window.app.chromeAI.gpuBlocked);
+        console.log('Full Status:', availability);
+        return availability;
+    },
+    
+    resetGPU() {
+        if (!window.app?.chromeAI) {
+            console.error('App not initialized or ChromeAI not available');
+            return;
+        }
+        
+        window.app.chromeAI.resetGPUState();
+        console.log('GPU state reset. Run testAvailability() to re-check.');
+    },
+    
+    async quickTest() {
+        console.log('=== Quick Chrome AI Test ===');
+        try {
+            const result = await window.app.chromeAI.analyzeText(
+                'You are a helpful assistant.',
+                'Say hello in one sentence.'
+            );
+            console.log('Test Result:', result);
+            return result;
+        } catch (error) {
+            console.error('Test Error:', error);
+            return { error: error.message };
+        }
+    }
+};
+
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.app = new LexFlowApp();

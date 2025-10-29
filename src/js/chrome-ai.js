@@ -8,6 +8,8 @@ export class ChromeAI {
         this.available = null;
         this.retryCount = 0;
         this.maxRetries = 3;
+        this.gpuBlocked = false; // Track if GPU is permanently blocked
+        this.lastAvailabilityCheck = null;
     }
 
     /**
@@ -15,7 +17,26 @@ export class ChromeAI {
      * @returns {Object} Availability status for each API
      */
     async checkAvailability() {
-        if (this.available) return this.available;
+        // If GPU was blocked, always return non-functional status
+        if (this.gpuBlocked) {
+            return {
+                ai: false,
+                prompt: false,
+                summarizer: false,
+                languageModel: false,
+                assistant: false,
+                chromeVersion: this.getChromeVersion(),
+                isCanary: this.isChromeCanary(),
+                functional: false,
+                error: 'GPU access blocked - restart Chrome Canary required'
+            };
+        }
+
+        // Cache availability for 30 seconds to avoid repeated checks
+        const now = Date.now();
+        if (this.available && this.lastAvailabilityCheck && (now - this.lastAvailabilityCheck < 30000)) {
+            return this.available;
+        }
 
         // Check for Chrome AI APIs - new global constructors
         const hasAI = 'ai' in self;
@@ -111,6 +132,7 @@ export class ChromeAI {
             }
         }
 
+        this.lastAvailabilityCheck = now;
         console.log('Chrome AI Availability:', this.available);
         return this.available;
     }
@@ -159,24 +181,31 @@ export class ChromeAI {
         delete config.summaryMode;
 
         try {
+            // Check if GPU was previously blocked
+            if (this.gpuBlocked) {
+                throw new Error('GPU access was previously blocked. Please restart Chrome Canary to reset the AI system.');
+            }
+
             // Use LanguageModel API if available
             if (availability.languageModel) {
+                // Re-check availability before creating session
                 const langAvailability = await self.LanguageModel.availability({
                     outputLanguage: config.outputLanguage
                 });
-                
+
                 if (langAvailability === 'available') {
                     console.log('Creating LanguageModel with config:', config);
                     const session = await self.LanguageModel.create(config);
-                    
+
                     // Store session reference to prevent garbage collection
                     if (!this.activeSessions) {
                         this.activeSessions = new Set();
                     }
                     this.activeSessions.add(session);
-                    
+
                     return session;
                 } else {
+                    console.warn(`LanguageModel availability changed to: ${langAvailability}`);
                     throw new Error(`LanguageModel not available: ${langAvailability}`);
                 }
             }
@@ -189,12 +218,14 @@ export class ChromeAI {
         } catch (error) {
             console.error('Error creating AI assistant:', error);
             console.error('Config used:', config);
-            
+
             // Handle specific GPU blocked error
             if (error.message.includes('GPU is blocked') || error.name === 'NotAllowedError') {
+                this.gpuBlocked = true; // Mark GPU as permanently blocked
+                this.available = null; // Reset availability cache
                 throw new Error('GPU access is blocked. This may be due to system security settings or hardware limitations. Try restarting Chrome Canary or check system GPU settings.');
             }
-            
+
             throw new Error(`Error creating AI assistant: ${error.message}`);
         }
     }
@@ -244,10 +275,10 @@ export class ChromeAI {
      */
     async analyzeText(systemPrompt, userText, options = {}) {
         let assistant = null;
-        
+
         try {
             console.log('Starting analyzeText with:', { systemPrompt: systemPrompt?.substring(0, 100), userText: userText?.substring(0, 100), options });
-            
+
             // Validate inputs first
             if (!userText || userText.trim().length === 0) {
                 throw new Error('User text is required and cannot be empty');
@@ -256,16 +287,16 @@ export class ChromeAI {
             // Retry logic for session creation and prompt execution
             let lastError = null;
             const maxRetries = 3;
-            
+
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 try {
                     console.log(`Attempt ${attempt}/${maxRetries}: Creating assistant...`);
                     assistant = await this.createAssistant(systemPrompt, options);
                     console.log('Assistant created successfully');
-                    
+
                     // Add a small delay to ensure session is ready
                     await new Promise(resolve => setTimeout(resolve, 100));
-                    
+
                     console.log('Sending prompt to assistant...');
                     const result = await assistant.prompt(userText);
                     console.log('Prompt completed successfully, result length:', result?.length);
@@ -279,11 +310,27 @@ export class ChromeAI {
                         source: 'chrome-ai',
                         timestamp: new Date().toISOString()
                     };
-                    
+
                 } catch (attemptError) {
                     console.warn(`Attempt ${attempt} failed:`, attemptError.message);
                     lastError = attemptError;
-                    
+
+                    // If GPU is blocked or was previously blocked, don't retry
+                    if (attemptError.message.includes('GPU is blocked') ||
+                        attemptError.name === 'NotAllowedError' ||
+                        attemptError.message.includes('GPU access was previously blocked') ||
+                        this.gpuBlocked) {
+                        console.error('GPU blocked detected, stopping retries');
+                        throw attemptError;
+                    }
+
+                    // If LanguageModel becomes unavailable after first attempt, likely GPU issue
+                    if (attemptError.message.includes('LanguageModel not available: unavailable') && attempt > 1) {
+                        console.error('LanguageModel became unavailable, likely GPU issue');
+                        this.gpuBlocked = true;
+                        throw new Error('GPU access appears to be blocked after initial failure. Please restart Chrome Canary.');
+                    }
+
                     // If session was destroyed, try creating a new one
                     if (attemptError.message.includes('session has been destroyed') && attempt < maxRetries) {
                         console.log('Session destroyed, will retry with new session...');
@@ -291,12 +338,7 @@ export class ChromeAI {
                         await new Promise(resolve => setTimeout(resolve, 500)); // Wait before retry
                         continue;
                     }
-                    
-                    // If GPU is blocked, don't retry
-                    if (attemptError.message.includes('GPU is blocked') || attemptError.name === 'NotAllowedError') {
-                        throw attemptError;
-                    }
-                    
+
                     // For other errors, retry with exponential backoff
                     if (attempt < maxRetries) {
                         const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
@@ -305,10 +347,10 @@ export class ChromeAI {
                     }
                 }
             }
-            
+
             // If all retries failed, throw the last error
             throw lastError || new Error('All retry attempts failed');
-            
+
         } catch (error) {
             console.error('Error in analyzeText:', error);
             console.error('Error details:', {
@@ -387,9 +429,12 @@ export class ChromeAI {
             message = 'Network error. Please check your connection.';
             fallback = 'retry';
             retryable = true;
-        } else if (errorMessage.includes('GPU is blocked') || errorName === 'NotAllowedError') {
+        } else if (errorMessage.includes('GPU is blocked') ||
+            errorName === 'NotAllowedError' ||
+            errorMessage.includes('GPU access was previously blocked') ||
+            errorMessage.includes('GPU access appears to be blocked')) {
             errorType = 'gpu_blocked';
-            message = 'GPU access is blocked. This may be due to system security settings, hardware limitations, or Chrome security policies. Try restarting Chrome Canary or check system GPU settings.';
+            message = 'GPU access is blocked. This may be due to system security settings, hardware limitations, or Chrome security policies. Restart Chrome Canary to reset the AI system.';
             fallback = 'restart_required';
             retryable = false;
         } else if (errorMessage.includes('session has been destroyed') || errorMessage.includes('session') && errorMessage.includes('destroyed')) {
@@ -487,6 +532,16 @@ export class ChromeAI {
         }
 
         return { provider, options };
+    }
+
+    /**
+     * Reset GPU blocked state (useful for testing or after Chrome restart)
+     */
+    resetGPUState() {
+        this.gpuBlocked = false;
+        this.available = null;
+        this.lastAvailabilityCheck = null;
+        console.log('GPU state reset - will re-check availability on next request');
     }
 
     /**
