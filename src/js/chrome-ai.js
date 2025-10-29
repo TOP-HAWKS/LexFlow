@@ -17,29 +17,83 @@ export class ChromeAI {
     async checkAvailability() {
         if (this.available) return this.available;
 
+        // Check for new Chrome AI APIs
+        const hasAI = 'ai' in self;
+        const hasLanguageModel = hasAI && 'languageModel' in self.ai;
+        const hasSummarizer = hasAI && 'summarizer' in self.ai;
+        const hasAssistant = hasAI && 'assistant' in self.ai;
+
         this.available = {
-            ai: 'ai' in self,
-            prompt: 'ai' in self && 'assistant' in self.ai,
-            summarizer: 'ai' in self && 'summarizer' in self.ai,
+            ai: hasAI,
+            prompt: hasLanguageModel || hasAssistant,
+            summarizer: hasSummarizer,
+            languageModel: hasLanguageModel,
+            assistant: hasAssistant,
             chromeVersion: this.getChromeVersion(),
             isCanary: this.isChromeCanary(),
             functional: false
         };
 
+        console.log('API Detection:', {
+            hasAI,
+            hasLanguageModel,
+            hasSummarizer,
+            hasAssistant,
+            selfAI: hasAI ? Object.keys(self.ai) : 'N/A'
+        });
+
         // Test functional availability
         if (this.available.prompt || this.available.summarizer) {
             try {
-                // Quick functional test
-                if (this.available.prompt) {
+                // Check capabilities first
+                let canUseLanguageModel = false;
+                let canUseSummarizer = false;
+
+                if (this.available.languageModel) {
+                    try {
+                        const capabilities = await self.ai.languageModel.capabilities();
+                        console.log('LanguageModel capabilities:', capabilities);
+                        canUseLanguageModel = capabilities.available === 'readily';
+                    } catch (capError) {
+                        console.warn('LanguageModel capabilities check failed:', capError);
+                    }
+                }
+
+                if (this.available.summarizer) {
+                    try {
+                        const capabilities = await self.ai.summarizer.capabilities();
+                        console.log('Summarizer capabilities:', capabilities);
+                        canUseSummarizer = capabilities.available === 'readily';
+                    } catch (capError) {
+                        console.warn('Summarizer capabilities check failed:', capError);
+                    }
+                }
+
+                // Test functional availability based on capabilities
+                if (canUseLanguageModel) {
+                    const session = await self.ai.languageModel.create({
+                        systemPrompt: 'You are a test assistant.',
+                        outputLanguage: 'en'
+                    });
+                    await session.prompt('Hello');
+                    this.available.functional = true;
+                } else if (canUseSummarizer) {
+                    const testSummarizer = await self.ai.summarizer.create({
+                        outputLanguage: 'en'
+                    });
+                    await testSummarizer.summarize('This is a test text for summarization.');
+                    this.available.functional = true;
+                } else if (this.available.assistant) {
+                    // Fallback to legacy Assistant API
                     const testAssistant = await self.ai.assistant.create({
-                        systemPrompt: 'You are a test assistant.'
+                        systemPrompt: 'You are a test assistant.',
+                        outputLanguage: 'en'
                     });
                     await testAssistant.prompt('Hello');
                     this.available.functional = true;
-                } else if (this.available.summarizer) {
-                    const testSummarizer = await self.ai.summarizer.create();
-                    await testSummarizer.summarize('This is a test text for summarization.');
-                    this.available.functional = true;
+                } else {
+                    this.available.functional = false;
+                    this.available.error = 'No AI APIs are ready for use';
                 }
             } catch (error) {
                 console.warn('Chrome AI functional test failed:', error);
@@ -66,8 +120,8 @@ export class ChromeAI {
      * @returns {boolean} True if Chrome Canary
      */
     isChromeCanary() {
-        return navigator.userAgent.includes('Chrome') && 
-               (navigator.userAgent.includes('Canary') || 
+        return navigator.userAgent.includes('Chrome') &&
+            (navigator.userAgent.includes('Canary') ||
                 navigator.userAgent.includes('Dev') ||
                 parseInt(this.getChromeVersion()) >= 120);
     }
@@ -80,18 +134,31 @@ export class ChromeAI {
      */
     async createAssistant(systemPrompt, options = {}) {
         const availability = await this.checkAvailability();
-        
+
         if (!availability.prompt) {
             throw new Error('Prompt API not available. Please verify you are using Chrome Canary with the required flags enabled.');
         }
 
         const config = {
             systemPrompt: systemPrompt,
+            outputLanguage: 'en', // Required for new API
             ...options
         };
 
         try {
-            return await self.ai.assistant.create(config);
+            // Check capabilities and use appropriate API
+            if (availability.languageModel) {
+                const capabilities = await self.ai.languageModel.capabilities();
+                if (capabilities.available === 'readily') {
+                    return await self.ai.languageModel.create(config);
+                }
+            }
+
+            if (availability.assistant) {
+                return await self.ai.assistant.create(config);
+            }
+
+            throw new Error('No compatible AI API available or ready');
         } catch (error) {
             console.error('Error creating AI assistant:', error);
             throw new Error(`Error creating AI assistant: ${error.message}`);
@@ -105,7 +172,7 @@ export class ChromeAI {
      */
     async createSummarizer(options = {}) {
         const availability = await this.checkAvailability();
-        
+
         if (!availability.summarizer) {
             throw new Error('Summarizer API not available. Please verify you are using Chrome Canary with the required flags enabled.');
         }
@@ -114,11 +181,17 @@ export class ChromeAI {
             type: 'key-points', // 'key-points', 'teaser', 'headline'
             format: 'markdown', // 'plain-text'
             length: 'medium', // 'short', 'long'
-            outputLanguage: 'en', // 'es', 'jp'
+            outputLanguage: 'en', // Required - 'en', 'es', 'ja'
             ...options
         };
 
         try {
+            // Check capabilities first
+            const capabilities = await self.ai.summarizer.capabilities();
+            if (capabilities.available !== 'readily') {
+                throw new Error(`Summarizer not ready: ${capabilities.available}`);
+            }
+
             return await self.ai.summarizer.create(config);
         } catch (error) {
             console.error('Error creating AI summarizer:', error);
@@ -137,10 +210,10 @@ export class ChromeAI {
         try {
             const assistant = await this.createAssistant(systemPrompt, options);
             const result = await assistant.prompt(userText);
-            
+
             // Reset retry count on success
             this.retryCount = 0;
-            
+
             return {
                 success: true,
                 result: result,
@@ -162,9 +235,9 @@ export class ChromeAI {
         try {
             const summarizer = await this.createSummarizer(options);
             const result = await summarizer.summarize(text);
-            
+
             this.retryCount = 0;
-            
+
             return {
                 success: true,
                 result: result,
@@ -276,7 +349,7 @@ export class ChromeAI {
         let options = {};
 
         // Use summarizer for summary-related tasks
-        if (presetType === 'executive-summary' || 
+        if (presetType === 'executive-summary' ||
             presetType === 'resumo' ||
             userPrompt.toLowerCase().includes('resumo') ||
             userPrompt.toLowerCase().includes('summary')) {
