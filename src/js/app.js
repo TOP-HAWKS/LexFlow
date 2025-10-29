@@ -184,11 +184,27 @@ class LexFlowApp {
                 const { clearStoredArticles } = await import('../util/article-storage.js');
                 await clearStoredArticles();
                 console.log('[LexFlow] Cleared article cache');
+                
+                // Also clear localStorage cache
+                const keys = Object.keys(localStorage).filter(key => key.startsWith('lexflow-articles-'));
+                keys.forEach(key => localStorage.removeItem(key));
+                console.log(`[LexFlow] Cleared ${keys.length} localStorage cache entries`);
             } catch (error) {
                 console.warn('[LexFlow] Could not clear article cache:', error);
             }
             
             this.reloadDocuments();
+        });
+
+        // Event delegation for dynamically created retry buttons
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('retry-documents-btn')) {
+                this.initializeDocumentsFromCorpus();
+            } else if (e.target.classList.contains('retry-articles-btn')) {
+                if (this.currentDocument) {
+                    this.displayArticles(this.currentDocument);
+                }
+            }
         });
 
         // Preset buttons
@@ -253,13 +269,17 @@ class LexFlowApp {
     }
 
     showDocumentsLoading(show) {
-        const loadingEl = document.getElementById('documents-loading');
         const documentList = document.getElementById('document-list');
+        
+        if (!documentList) {
+            console.warn('[LexFlow] Document list element not found');
+            return;
+        }
 
         if (show) {
-            loadingEl.style.display = 'flex';
             documentList.innerHTML = '<div class="loading-state" id="documents-loading"><div class="spinner"></div>Loading documents...</div>';
         } else {
+            const loadingEl = document.getElementById('documents-loading');
             if (loadingEl) {
                 loadingEl.style.display = 'none';
             }
@@ -272,7 +292,7 @@ class LexFlowApp {
             <div class="empty-state">
                 <p>No articles found for this document</p>
                 <small>Try changing the document or search term</small>
-                <button class="btn btn-secondary" onclick="window.app.initializeDocumentsFromCorpus()" style="margin-top: 1rem;">
+                <button class="btn btn-secondary retry-documents-btn" style="margin-top: 1rem;">
                     🔄 Retry
                 </button>
             </div>
@@ -392,8 +412,8 @@ class LexFlowApp {
                 container.innerHTML = `
                     <div class="empty-state">
                         <p>No articles found for this document</p>
-                        <small>Try selecting a different document</small>
-                        <button class="btn btn-secondary" onclick="window.app.displayArticles(window.app.currentDocument)" style="margin-top: 1rem;">
+                        <small>Could not connect to or parse the document content</small>
+                        <button class="btn btn-secondary retry-articles-btn" style="margin-top: 1rem;">
                             🔄 Retry
                         </button>
                     </div>
@@ -427,7 +447,7 @@ class LexFlowApp {
                 <div class="empty-state">
                     <p>Error loading articles: ${error.message}</p>
                     <small>Please try again</small>
-                    <button class="btn btn-secondary" onclick="window.app.displayArticles(window.app.currentDocument)" style="margin-top: 1rem;">
+                    <button class="btn btn-secondary retry-articles-btn" style="margin-top: 1rem;">
                         🔄 Retry
                     </button>
                 </div>

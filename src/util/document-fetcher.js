@@ -203,11 +203,22 @@ function extractYearFromContent(title) {
  */
 export async function fetchDocumentContent(document) {
     try {
-        // First, try to get from IndexedDB cache
+        // First, try to get from IndexedDB cache (but skip if it's mock data)
         const cachedArticles = await getStoredArticles(document.id);
         if (cachedArticles && cachedArticles.length > 0) {
-            console.log(`[LexFlow] Using cached articles for ${document.id}`);
-            return cachedArticles;
+            // Check if cached articles are mock/fake content
+            const isMockContent = cachedArticles.some(article => 
+                article.content.includes('sample article for demonstration') ||
+                article.content.includes('This is another sample article')
+            );
+            
+            if (!isMockContent) {
+                console.log(`[LexFlow] Using cached articles for ${document.id}`);
+                return cachedArticles;
+            } else {
+                console.log(`[LexFlow] Clearing mock articles from cache for ${document.id}`);
+                // Clear the mock cache and fetch fresh content
+            }
         }
 
         const corpusBaseUrl = await resolveCorpusBaseUrl();
@@ -217,13 +228,8 @@ export async function fetchDocumentContent(document) {
         const response = await fetch(documentUrl);
 
         if (!response.ok) {
-            console.warn(`[LexFlow] Document not found at ${documentUrl}, using mock articles`);
-            const mockArticles = getMockArticles(document.id);
-
-            // Store mock articles for faster subsequent loads
-            await storeArticles(document.id, mockArticles, 'mock');
-
-            return mockArticles;
+            console.warn(`[LexFlow] Document not found at ${documentUrl} (${response.status})`);
+            return [];
         }
 
         const markdown = await response.text();
@@ -232,20 +238,24 @@ export async function fetchDocumentContent(document) {
         const contentWithoutFrontmatter = markdown.replace(/^---[\s\S]*?---\n?/, '').trim();
 
         if (!contentWithoutFrontmatter || contentWithoutFrontmatter.length < 50) {
-            console.warn(`[LexFlow] Document at ${documentUrl} is empty or has insufficient content, using mock articles`);
-            const mockArticles = getMockArticles(document.id);
-            await storeArticles(document.id, mockArticles, 'mock');
-            return mockArticles;
+            console.warn(`[LexFlow] Document at ${documentUrl} is empty or has insufficient content`);
+            return [];
         }
 
         const articles = parseMarkdownToArticles(markdown, document);
 
         if (articles.length === 0) {
-            // If parsing failed, use mock articles
-            console.warn(`[LexFlow] No articles parsed from ${documentUrl}, using mock articles`);
-            const mockArticles = getMockArticles(document.id);
-            await storeArticles(document.id, mockArticles, 'mock');
-            return mockArticles;
+            // If parsing failed, try a simple fallback approach
+            console.warn(`[LexFlow] No articles parsed from ${documentUrl}, trying simple content split`);
+            const fallbackArticles = createFallbackArticles(contentWithoutFrontmatter, document);
+
+            if (fallbackArticles.length > 0) {
+                await storeArticles(document.id, fallbackArticles, 'fallback');
+                return fallbackArticles;
+            } else {
+                console.error(`[LexFlow] Could not parse any content from ${document.title}`);
+                return [];
+            }
         }
 
         // Store the fetched articles
@@ -256,17 +266,7 @@ export async function fetchDocumentContent(document) {
 
     } catch (error) {
         console.error('Error fetching document content:', error);
-        const mockArticles = getMockArticles(document.id);
-        console.log(`[LexFlow] Using ${mockArticles.length} mock articles for ${document.title}`);
-
-        // Store mock articles as fallback
-        try {
-            await storeArticles(document.id, mockArticles, 'mock');
-        } catch (storeError) {
-            console.error('Error storing mock articles:', storeError);
-        }
-
-        return mockArticles;
+        return [];
     }
 }
 
@@ -280,47 +280,74 @@ function parseMarkdownToArticles(markdown, document) {
     const articles = [];
 
     // Remove YAML frontmatter if present
-    const content = markdown.replace(/^---[\s\S]*?---\n/, '');
+    let content = markdown.replace(/^---[\s\S]*?---\n/, '').trim();
 
-    // Split by headings (## or ###)
-    const sections = content.split(/^(#{2,3})\s+(.+)$/gm);
+    // Remove the main title (first # heading)
+    content = content.replace(/^#\s+.+\n/, '').trim();
 
-    let currentHeading = null;
-    let currentContent = '';
-
-    for (let i = 0; i < sections.length; i++) {
-        const section = sections[i];
-
-        if (section.match(/^#{2,3}$/)) {
-            // This is a heading marker, next item is the heading text
-            if (currentHeading && currentContent.trim()) {
-                articles.push({
-                    id: `${document.id}-${slugify(currentHeading)}`,
-                    number: currentHeading,
-                    content: currentContent.trim(),
-                    citation: `${document.jurisdiction}/${document.path}#${slugify(currentHeading)}`,
-                    document: document.id
-                });
-            }
-            currentHeading = sections[i + 1];
-            currentContent = '';
-            i++; // Skip the heading text
-        } else if (currentHeading) {
-            currentContent += section;
-        }
+    if (!content) {
+        console.warn(`[LexFlow] No content found after removing frontmatter and title`);
+        return articles;
     }
 
-    // Add the last article if exists
-    if (currentHeading && currentContent.trim()) {
-        articles.push({
-            id: `${document.id}-${slugify(currentHeading)}`,
-            number: currentHeading,
-            content: currentContent.trim(),
-            citation: `${document.jurisdiction}/${document.path}#${slugify(currentHeading)}`,
-            document: document.id
+    // Try to parse by different structures
+
+    // Method 1: Look for article numbers (Art. X, Article X, etc.)
+    const articleMatches = content.match(/(?:^|\n)(Art\.?\s*\d+[^\n]*|Article\s+\d+[^\n]*)/gi);
+
+    if (articleMatches && articleMatches.length > 0) {
+        console.log(`[LexFlow] Found ${articleMatches.length} articles by article numbers`);
+
+        // Split by article numbers
+        const articleSections = content.split(/(?=(?:^|\n)(?:Art\.?\s*\d+|Article\s+\d+))/i);
+
+        articleSections.forEach((section, index) => {
+            const trimmedSection = section.trim();
+            if (trimmedSection) {
+                // Extract article number from first line
+                const firstLine = trimmedSection.split('\n')[0];
+                const articleNumber = firstLine.match(/Art\.?\s*\d+[^\n]*/i)?.[0] || `Article ${index + 1}`;
+
+                // Get content (everything after first line)
+                const articleContent = trimmedSection.split('\n').slice(1).join('\n').trim();
+
+                if (articleContent) {
+                    articles.push({
+                        id: `${document.id}-${slugify(articleNumber)}`,
+                        number: articleNumber,
+                        content: articleContent,
+                        citation: `${document.jurisdiction}/${document.path}#${slugify(articleNumber)}`,
+                        document: document.id
+                    });
+                }
+            }
+        });
+    } else {
+        // Method 2: Split by paragraphs (double line breaks)
+        const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim().length > 50);
+
+        console.log(`[LexFlow] Found ${paragraphs.length} paragraphs to convert to articles`);
+
+        paragraphs.forEach((paragraph, index) => {
+            const trimmedParagraph = paragraph.trim();
+            if (trimmedParagraph) {
+                // Use first few words as the article title
+                const firstWords = trimmedParagraph.split(' ').slice(0, 8).join(' ');
+                const articleTitle = firstWords.length > 50 ? firstWords.substring(0, 50) + '...' : firstWords;
+
+                articles.push({
+                    id: `${document.id}-paragraph-${index + 1}`,
+                    number: `Paragraph ${index + 1}`,
+                    content: trimmedParagraph,
+                    citation: `${document.jurisdiction}/${document.path}#paragraph-${index + 1}`,
+                    document: document.id,
+                    preview: articleTitle
+                });
+            }
         });
     }
 
+    console.log(`[LexFlow] Parsed ${articles.length} articles from ${document.title}`);
     return articles;
 }
 
@@ -496,27 +523,58 @@ function getMockArticles(documentId) {
         ]
     };
 
-    // If no specific mock articles found, return generic ones
+    // If no specific mock articles found, return empty array
+    // This will force the system to try parsing the real content
     if (!mockArticles[documentId]) {
-        return [
-            {
-                id: `${documentId}-article-1`,
-                number: 'Article 1',
-                content: 'This is a sample article for demonstration purposes. The actual content would be loaded from the legal corpus repository.',
-                citation: `US/Federal/${documentId}.md#article-1`,
-                document: documentId
-            },
-            {
-                id: `${documentId}-article-2`,
-                number: 'Article 2',
-                content: 'This is another sample article showing how legal documents are structured and displayed in the LexFlow interface.',
-                citation: `US/Federal/${documentId}.md#article-2`,
-                document: documentId
-            }
-        ];
+        console.log(`[LexFlow] No mock articles defined for ${documentId}, returning empty array`);
+        return [];
     }
 
     return mockArticles[documentId];
+}
+
+/**
+ * Create fallback articles when normal parsing fails
+ * @param {string} content - Raw content without frontmatter
+ * @param {Object} document - Document object
+ * @returns {Array} Array of fallback articles
+ */
+function createFallbackArticles(content, document) {
+    const articles = [];
+
+    if (!content || content.length < 100) {
+        return articles;
+    }
+
+    // Split content into sentences or logical chunks
+    const sentences = content.split(/[.!?]+/).filter(s => s.trim().length > 20);
+
+    // Group sentences into paragraphs (every 3-5 sentences)
+    const paragraphSize = 3;
+    for (let i = 0; i < sentences.length; i += paragraphSize) {
+        const paragraphSentences = sentences.slice(i, i + paragraphSize);
+        const paragraphContent = paragraphSentences.join('. ').trim();
+
+        if (paragraphContent.length > 50) {
+            // Create a title from the first sentence
+            const firstSentence = paragraphSentences[0].trim();
+            const title = firstSentence.length > 60 ?
+                firstSentence.substring(0, 60) + '...' :
+                firstSentence;
+
+            articles.push({
+                id: `${document.id}-section-${Math.floor(i / paragraphSize) + 1}`,
+                number: `Section ${Math.floor(i / paragraphSize) + 1}`,
+                content: paragraphContent + (paragraphContent.endsWith('.') ? '' : '.'),
+                citation: `${document.jurisdiction}/${document.path}#section-${Math.floor(i / paragraphSize) + 1}`,
+                document: document.id,
+                preview: title
+            });
+        }
+    }
+
+    console.log(`[LexFlow] Created ${articles.length} fallback articles from content`);
+    return articles;
 }
 
 /**
