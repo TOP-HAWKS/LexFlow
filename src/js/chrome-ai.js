@@ -88,9 +88,10 @@ export class ChromeAI {
         }
 
         const config = {
-            type: 'tl;dr', // 'key-points', 'teaser', 'headline'
+            type: 'key-points', // 'key-points', 'teaser', 'headline'
             format: 'markdown', // 'plain-text'
             length: 'medium', // 'short', 'long'
+            outputLanguage: 'en', // 'es', 'jp'
             ...options
         };
 
