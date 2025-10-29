@@ -184,7 +184,7 @@ class LexFlowApp {
                 const { clearStoredArticles } = await import('../util/article-storage.js');
                 await clearStoredArticles();
                 console.log('[LexFlow] Cleared article cache');
-                
+
                 // Also clear localStorage cache
                 const keys = Object.keys(localStorage).filter(key => key.startsWith('lexflow-articles-'));
                 keys.forEach(key => localStorage.removeItem(key));
@@ -192,7 +192,7 @@ class LexFlowApp {
             } catch (error) {
                 console.warn('[LexFlow] Could not clear article cache:', error);
             }
-            
+
             this.reloadDocuments();
         });
 
@@ -270,7 +270,7 @@ class LexFlowApp {
 
     showDocumentsLoading(show) {
         const documentList = document.getElementById('document-list');
-        
+
         if (!documentList) {
             console.warn('[LexFlow] Document list element not found');
             return;
@@ -366,7 +366,7 @@ class LexFlowApp {
 
     async selectDocument(element, docId) {
         console.log(`[LexFlow] Selecting document: ${docId}`);
-        
+
         // Update UI
         document.querySelectorAll('.document-item').forEach(item => {
             item.classList.remove('selected');
@@ -375,7 +375,7 @@ class LexFlowApp {
 
         this.currentDocument = this.availableDocuments.find(doc => doc.id === docId);
         console.log(`[LexFlow] Found document:`, this.currentDocument);
-        
+
         if (this.currentDocument) {
             await this.displayArticles(this.currentDocument);
         } else {
@@ -404,7 +404,7 @@ class LexFlowApp {
             console.log(`[LexFlow] Fetching articles for ${doc.title}...`);
             const articles = await fetchDocumentContent(doc);
             console.log(`[LexFlow] Received ${articles.length} articles:`, articles);
-            
+
             this.currentDocumentArticles = articles;
 
             if (articles.length === 0) {
@@ -580,14 +580,14 @@ class LexFlowApp {
         const contextSummary = document.getElementById('context-summary');
         const placeholder = document.getElementById('ai-placeholder');
         const aiOutput = document.getElementById('ai-output');
-        
+
         if (contextSummary && this.selectedArticles.length > 0) {
             const summary = `${this.selectedArticles.length} article(s) selected from ${this.currentDocument?.title || 'document'}:\n\n` +
                 this.selectedArticles.map(article => `• ${article.number}`).join('\n');
 
             contextSummary.textContent = summary;
         }
-        
+
         // Show placeholder if no AI result is displayed
         if (placeholder && aiOutput) {
             if (aiOutput.style.display === 'none' || !aiOutput.style.display) {
@@ -749,20 +749,52 @@ class LexFlowApp {
         sendToCurationBtn.style.display = 'none';
 
         try {
-            // Check Chrome AI availability
+            // Check Chrome AI availability with functional test
             const aiStatus = await this.chromeAI.checkAvailability();
-            if (!aiStatus.prompt) {
-                throw new Error('Chrome AI is not available. Please check your Chrome settings.');
+            console.log('Chrome AI Status:', aiStatus);
+
+            if (!aiStatus.functional) {
+                throw new Error('Chrome AI is not available or not functional. Please check your Chrome Canary settings and experimental flags.');
             }
 
-            const systemPrompt = `You are a legal assistant specialized in legal analysis. 
-            Analyze the provided legal texts with technical precision and language appropriate for legal professionals.
-            Provide structured, practical, and well-founded analyses.`;
+            // Prepare context
+            const context = this.selectedArticles.map(article =>
+                `${article.number}: ${article.content}`
+            ).join('\n\n');
 
-            const userPrompt = document.getElementById('custom-prompt').value + '\n\nArticles for analysis:\n' + this.selectedContext;
+            const userPrompt = document.getElementById('custom-prompt').value;
+            const presetType = document.querySelector('.preset-btn.active')?.dataset.preset;
 
-            // Execute AI analysis
-            const result = await this.chromeAI.analyzeText(systemPrompt, userPrompt);
+            // Detect which AI provider to use
+            const aiDetection = this.chromeAI.detectAIProvider(userPrompt, presetType);
+            const { provider: aiProvider, options: aiOptions } = aiDetection;
+            console.log('🤖 Using AI Provider:', aiProvider, 'with options:', aiOptions);
+
+            let result;
+
+            if (aiProvider === 'summarizer') {
+                // Use Summarizer API for summaries
+                result = await this.chromeAI.summarizeText(context, {
+                    type: 'key-points',
+                    format: 'markdown',
+                    length: 'medium',
+                    ...aiOptions
+                });
+            } else {
+                // Use Assistant API for complex analysis
+                const systemPrompt = `You are a legal assistant specialized in legal analysis. 
+                Analyze the provided legal texts with technical precision and language appropriate for legal professionals.
+                Provide structured, practical, and well-founded analyses.
+                
+                Expected response format:
+                - Executive summary of main points
+                - Detailed legal analysis
+                - Practical implications
+                - Specific recommendations`;
+
+                const fullPrompt = userPrompt + '\n\nArticles for analysis:\n' + context;
+                result = await this.chromeAI.analyzeText(systemPrompt, fullPrompt, aiOptions);
+            }
 
             if (result.success) {
                 // Show result
@@ -783,7 +815,7 @@ class LexFlowApp {
                 // Save to history
                 await this.saveAnalysisToHistory(userPrompt, result.result);
 
-                this.toastSystem.show('Analysis completed successfully!', 'success');
+                this.toastSystem.show(`Analysis completed successfully! (${result.source})`, 'success');
             } else {
                 throw new Error(result.message || 'Error in AI analysis');
             }
@@ -942,7 +974,7 @@ class LexFlowApp {
         ];
 
         this.queueItems.push(...sampleItems);
-        
+
         // Add sample history items if none exist
         if (this.historyItems.length === 0) {
             const sampleHistory = [
@@ -963,11 +995,11 @@ class LexFlowApp {
                     type: 'ai_analysis'
                 }
             ];
-            
+
             this.historyItems.push(...sampleHistory);
             this.updateHistoryView();
         }
-        
+
         this.updateCollectorView();
         this.updateStats();
         this.toastSystem.show('Sample content added!', 'success');
@@ -1021,12 +1053,12 @@ class LexFlowApp {
         try {
             console.log('[LexFlow] Reloading documents from corpus...');
             this.showDocumentsLoading(true);
-            
+
             // Clear current selection
             this.currentDocument = null;
             this.currentDocumentArticles = [];
             this.selectedArticles = [];
-            
+
             // Clear articles container
             const articlesContainer = document.getElementById('articles-container');
             if (articlesContainer) {
@@ -1037,13 +1069,13 @@ class LexFlowApp {
                     </div>
                 `;
             }
-            
+
             // Fetch fresh documents
             const documents = await fetchDocumentsFromCorpus();
             this.availableDocuments = documents;
             this.renderDocuments(documents);
             this.showDocumentsLoading(false);
-            
+
             console.log(`[LexFlow] Reloaded ${documents.length} documents`);
         } catch (error) {
             console.error('[LexFlow] Error reloading documents:', error);
@@ -1058,7 +1090,7 @@ class LexFlowApp {
     async loadLocationFromSettings() {
         try {
             const settings = await getAllSettings();
-            
+
             // Set default values if not configured
             if (!settings.country) {
                 const defaultSettings = {
@@ -1068,22 +1100,22 @@ class LexFlowApp {
                     city: 'San Francisco',
                     serverlessEndpoint: 'https://lexflow-corpus.webmaster-1d0.workers.dev'
                 };
-                
+
                 await setSettings(defaultSettings);
                 console.log('[LexFlow] Default settings initialized');
-                
+
                 // Use default settings for location
                 Object.assign(settings, defaultSettings);
             }
-            
+
             // Build location string from settings
             const locationParts = [];
             if (settings.city) locationParts.push(settings.city);
             if (settings.state) locationParts.push(settings.state);
             if (settings.country) locationParts.push(settings.country);
-            
+
             const location = locationParts.join(', ');
-            
+
             if (location) {
                 document.getElementById('user-location').textContent = location;
                 console.log('[LexFlow] Location loaded from settings:', location);
@@ -1467,7 +1499,7 @@ class LexFlowApp {
         if (historyAnalyses) historyAnalyses.textContent = this.historyItems.length;
         if (historyDocuments) historyDocuments.textContent = this.queueItems.filter(item => item.status === 'processed').length;
         if (historyArticles) historyArticles.textContent = this.selectedArticles.length;
-        
+
         // Calculate AI accuracy (mock calculation based on successful analyses)
         const accuracy = this.historyItems.length > 0 ? Math.min(95, 85 + (this.historyItems.length * 2)) : 0;
         if (historyAccuracy) historyAccuracy.textContent = accuracy > 0 ? `${accuracy}%` : '{{n}}';
@@ -1682,11 +1714,11 @@ class LexFlowApp {
         }
 
         const parts = [];
-        
+
         // Use explicit country or derive from language
         const country = jurisdiction.country || languageToCountry[language] || 'US';
         parts.push(country.toUpperCase());
-        
+
         if (jurisdiction.state) {
             parts.push(jurisdiction.state.toUpperCase());
         } else if (jurisdiction.level) {

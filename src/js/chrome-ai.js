@@ -22,8 +22,31 @@ export class ChromeAI {
             prompt: 'ai' in self && 'assistant' in self.ai,
             summarizer: 'ai' in self && 'summarizer' in self.ai,
             chromeVersion: this.getChromeVersion(),
-            isCanary: this.isChromeCanary()
+            isCanary: this.isChromeCanary(),
+            functional: false
         };
+
+        // Test functional availability
+        if (this.available.prompt || this.available.summarizer) {
+            try {
+                // Quick functional test
+                if (this.available.prompt) {
+                    const testAssistant = await self.ai.assistant.create({
+                        systemPrompt: 'You are a test assistant.'
+                    });
+                    await testAssistant.prompt('Hello');
+                    this.available.functional = true;
+                } else if (this.available.summarizer) {
+                    const testSummarizer = await self.ai.summarizer.create();
+                    await testSummarizer.summarize('This is a test text for summarization.');
+                    this.available.functional = true;
+                }
+            } catch (error) {
+                console.warn('Chrome AI functional test failed:', error);
+                this.available.functional = false;
+                this.available.error = error.message;
+            }
+        }
 
         console.log('Chrome AI Availability:', this.available);
         return this.available;
@@ -239,6 +262,33 @@ export class ChromeAI {
         }
 
         return results;
+    }
+
+    /**
+     * Detect which AI provider to use based on prompt and preset
+     * @param {string} userPrompt - User prompt text
+     * @param {string} presetType - Preset type (resumo, analise, etc.)
+     * @returns {Object} Provider detection result
+     */
+    detectAIProvider(userPrompt, presetType) {
+        // Default to assistant for complex analysis
+        let provider = 'assistant';
+        let options = {};
+
+        // Use summarizer for summary-related tasks
+        if (presetType === 'executive-summary' || 
+            presetType === 'resumo' ||
+            userPrompt.toLowerCase().includes('resumo') ||
+            userPrompt.toLowerCase().includes('summary')) {
+            provider = 'summarizer';
+            options = {
+                type: 'key-points',
+                format: 'markdown',
+                length: 'medium'
+            };
+        }
+
+        return { provider, options };
     }
 
     /**
