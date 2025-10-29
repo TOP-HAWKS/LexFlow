@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Nano Debug Tool</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .test-section {
+            margin: 15px 0;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .success {
+            border-left: 4px solid #28a745;
+        }
+
+        .error {
+            border-left: 4px solid #dc3545;
+        }
+
+        .warning {
+            border-left: 4px solid #ffc107;
+        }
+
+        .info {
+            border-left: 4px solid #17a2b8;
+        }
+
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+
+        .log {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 4px;
+            height: 200px;
+            overflow-y: auto;
+            font-size: 11px;
+        }
+
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            margin-top: 0;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .status.ok {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.fail {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.warn {
+            background: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔬 Gemini Nano Debug Tool</h1>
+    <p>Ferramenta de diagnóstico detalhado para Chrome AI (Gemini Nano)</p>
+
+    <div class="test-section info">
+        <h2>📊 Status Geral</h2>
+        <div id="general-status">Aguardando testes...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 1. Detecção de APIs</h2>
+        <button onclick="testAPIDetection()">Detectar APIs Disponíveis</button>
+        <div id="api-detection-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>🧪 2. Teste de Availability</h2>
+        <button onclick="testAvailability()">Testar Availability (com outputLanguage)</button>
+        <div id="availability-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>🏗️ 3. Teste de Criação de Sessão</h2>
+        <button onclick="testSessionCreation()">Criar Sessão LanguageModel</button>
+        <div id="session-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>💬 4. Teste de Prompt Simples</h2>
+        <button onclick="testSimplePrompt()">Prompt Básico</button>
+        <div id="prompt-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔄 5. Teste Completo LexFlow</h2>
+        <button onclick="testLexFlowIntegration()">Simular Fluxo LexFlow</button>
+        <div id="lexflow-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>📋 Log de Debug</h2>
+        <button onclick="clearLog()">Limpar Log</button>
+        <button onclick="exportLog()">Exportar Log</button>
+        <div id="debug-log" class="log"></div>
+    </div>
+
+    <script>
+        let debugLog = [];
+        let currentSession = null;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toISOString();
+            const logEntry = '[' + timestamp + '] [' + type.toUpperCase() + '] ' + message;
+            debugLog.push(logEntry);
+
+            const logDiv = document.getElementById('debug-log');
+            logDiv.innerHTML += logEntry + '\n';
+            logDiv.scrollTop = logDiv.scrollHeight;
+
+            console.log(logEntry);
+        }
+
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('general-status');
+            const statusClass = type === 'success' ? 'ok' : type === 'error' ? 'fail' : 'warn';
+            statusDiv.innerHTML = '<span class="status ' + statusClass + '">' + message + '</span>';
+        }
+
+        function showResult(elementId, content, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = '<div class="result ' + type + '">' + content + '</div>';
+        }
+
+        async function testAPIDetection() {
+            log('=== INICIANDO DETECÇÃO DE APIs ===');
+
+            try {
+                const hasAI = 'ai' in self;
+                const hasLanguageModel = 'LanguageModel' in self;
+                const hasSummarizer = 'Summarizer' in self;
+                const hasAssistant = hasAI && 'assistant' in self.ai;
+
+                log('AI global: ' + hasAI);
+                log('LanguageModel: ' + hasLanguageModel);
+                log('Summarizer: ' + hasSummarizer);
+                log('Assistant: ' + hasAssistant);
+
+                if (hasAI) {
+                    log('AI keys: ' + Object.keys(self.ai).join(', '));
+                }
+
+                const chromeMatch = navigator.userAgent.match(/Chrome\/(\d+)/);
+                const chromeVersion = chromeMatch ? chromeMatch[1] : 'unknown';
+                log('Chrome version: ' + chromeVersion);
+
+                const result = '<h3>Resultados da Detecção:</h3>' +
+                    '<ul>' +
+                    '<li><strong>AI Global:</strong> ' + (hasAI ? '✅' : '❌') + '</li>' +
+                    '<li><strong>LanguageModel:</strong> ' + (hasLanguageModel ? '✅' : '❌') + '</li>' +
+                    '<li><strong>Summarizer:</strong> ' + (hasSummarizer ? '✅' : '❌') + '</li>' +
+                    '<li><strong>Assistant:</strong> ' + (hasAssistant ? '✅' : '❌') + '</li>' +
+                    '<li><strong>Chrome Version:</strong> ' + chromeVersion + '</li>' +
+                    '</ul>';
+
+                showResult('api-detection-result', result, hasLanguageModel ? 'success' : 'error');
+                updateStatus(hasLanguageModel ? 'APIs Detectadas' : 'APIs Não Encontradas', hasLanguageModel ? 'success' : 'error');
+
+            } catch (error) {
+                log('Erro na detecção: ' + error.message, 'error');
+                showResult('api-detection-result', '<p>❌ Erro: ' + error.message + '</p>', 'error');
+                updateStatus('Erro na Detecção', 'error');
+            }
+        }
+
+        async function testAvailability() {
+            log('=== TESTANDO AVAILABILITY ===');
+
+            try {
+                if (!('LanguageModel' in self)) {
+                    throw new Error('LanguageModel não disponível');
+                }
+
+                log('Testando LanguageModel.availability() com outputLanguage...');
+                const langAvailability = await self.LanguageModel.availability({
+                    outputLanguage: 'en'
+                });
+                log('LanguageModel availability: ' + langAvailability);
+
+                let summarizerAvailability = null;
+                if ('Summarizer' in self) {
+                    log('Testando Summarizer.availability() com outputLanguage...');
+                    summarizerAvailability = await self.Summarizer.availability({
+                        outputLanguage: 'en'
+                    });
+                    log('Summarizer availability: ' + summarizerAvailability);
+                }
+
+                const result = '<h3>Resultados de Availability:</h3>' +
+                    '<ul>' +
+                    '<li><strong>LanguageModel:</strong> ' + langAvailability + '</li>' +
+                    '<li><strong>Summarizer:</strong> ' + (summarizerAvailability || 'N/A') + '</li>' +
+                    '</ul>';
+
+                showResult('availability-result', result, langAvailability === 'available' ? 'success' : 'warning');
+
+            } catch (error) {
+                log('Erro no availability: ' + error.message, 'error');
+                showResult('availability-result', '<p>❌ Erro: ' + error.message + '</p>', 'error');
+            }
+        }
+
+        async function testSessionCreation() {
+            log('=== TESTANDO CRIAÇÃO DE SESSÃO ===');
+
+            try {
+                if (!('LanguageModel' in self)) {
+                    throw new Error('LanguageModel não disponível');
+                }
+
+                log('Criando sessão LanguageModel...');
+                currentSession = await self.LanguageModel.create({
+                    systemPrompt: 'You are a helpful assistant.',
+                    outputLanguage: 'en'
+                });
+                log('Sessão LanguageModel criada com sucesso!');
+
+                const result = '<h3>✅ Sessão Criada com Sucesso</h3>' +
+                    '<p>LanguageModel session criada e pronta para uso.</p>';
+
+                showResult('session-result', result, 'success');
+
+            } catch (error) {
+                log('Erro na criação de sessão: ' + error.message, 'error');
+                log('Stack trace: ' + error.stack, 'error');
+                showResult('session-result', '<p>❌ Erro: ' + error.message + '</p><pre>' + error.stack + '</pre>', 'error');
+            }
+        }
+
+        async function testSimplePrompt() {
+            log('=== TESTANDO PROMPT SIMPLES ===');
+
+            try {
+                if (!currentSession) {
+                    log('Criando nova sessão para teste...');
+                    await testSessionCreation();
+                }
+
+                if (!currentSession) {
+                    throw new Error('Não foi possível criar sessão');
+                }
+
+                log('Enviando prompt simples...');
+                const response = await currentSession.prompt('Say hello in English.');
+                log('Resposta recebida: ' + response);
+
+                const result = '<h3>✅ Prompt Executado com Sucesso</h3>' +
+                    '<p><strong>Prompt:</strong> "Say hello in English."</p>' +
+                    '<p><strong>Resposta:</strong></p>' +
+                    '<div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0;">' +
+                    response +
+                    '</div>';
+
+                showResult('prompt-result', result, 'success');
+                updateStatus('Prompt Funcionando', 'success');
+
+            } catch (error) {
+                log('Erro no prompt: ' + error.message, 'error');
+                log('Stack trace: ' + error.stack, 'error');
+                showResult('prompt-result', '<p>❌ Erro: ' + error.message + '</p><pre>' + error.stack + '</pre>', 'error');
+                updateStatus('Erro no Prompt', 'error');
+            }
+        }
+
+        async function testLexFlowIntegration() {
+            log('=== TESTANDO INTEGRAÇÃO LEXFLOW ===');
+
+            try {
+                log('Simulando fluxo LexFlow...');
+
+                const systemPrompt = 'You are a legal assistant specialized in creating executive summaries. ' +
+                    'Create a concise, well-structured executive summary of the provided legal texts. ' +
+                    'Focus on key points, main rights and obligations, and practical implications. ' +
+                    'Use clear, professional language suitable for legal professionals.';
+
+                log('Criando sessão com system prompt do LexFlow...');
+                const session = await self.LanguageModel.create({
+                    systemPrompt: systemPrompt,
+                    outputLanguage: 'en'
+                });
+
+                const context = 'Article IV: The right of the people to be secure in their persons, houses, papers, and effects, ' +
+                    'against unreasonable searches and seizures, shall not be violated, and no Warrants shall issue, ' +
+                    'but upon probable cause, supported by Oath or affirmation, and particularly describing the place to be searched, ' +
+                    'and the persons or things to be seized.';
+
+                const userPrompt = 'Create an executive summary of the selected articles, highlighting the main rights and obligations, ' +
+                    'using accessible language for presentation to the client.';
+                const fullPrompt = userPrompt + '\n\nArticles for analysis:\n' + context;
+
+                log('Enviando prompt completo do LexFlow...');
+                const response = await session.prompt(fullPrompt);
+                log('Resposta LexFlow recebida (' + response.length + ' chars)');
+
+                const result = '<h3>✅ Integração LexFlow Funcionando</h3>' +
+                    '<p><strong>System Prompt:</strong> ' + systemPrompt.substring(0, 100) + '...</p>' +
+                    '<p><strong>User Prompt:</strong> ' + userPrompt + '</p>' +
+                    '<p><strong>Context:</strong> ' + context.substring(0, 100) + '...</p>' +
+                    '<p><strong>Resultado:</strong></p>' +
+                    '<div style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin: 10px 0; max-height: 300px; overflow-y: auto;">' +
+                    response +
+                    '</div>';
+
+                showResult('lexflow-result', result, 'success');
+                updateStatus('LexFlow Integração OK', 'success');
+
+            } catch (error) {
+                log('Erro na integração LexFlow: ' + error.message, 'error');
+                log('Stack trace: ' + error.stack, 'error');
+                showResult('lexflow-result', '<p>❌ Erro: ' + error.message + '</p><pre>' + error.stack + '</pre>', 'error');
+                updateStatus('Erro LexFlow', 'error');
+            }
+        }
+
+        function clearLog() {
+            debugLog = [];
+            document.getElementById('debug-log').innerHTML = '';
+        }
+
+        function exportLog() {
+            const logText = debugLog.join('\n');
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'gemini-nano-debug-' + new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.log';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Auto-start detection
+        document.addEventListener('DOMContentLoaded', function () {
+            log('=== GEMINI NANO DEBUG TOOL INICIADO ===');
+            setTimeout(testAPIDetection, 500);
+        });
+    </script>
+</body>
+
+</html>
+
+</html>
