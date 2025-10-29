@@ -19,7 +19,7 @@ chrome.runtime.onInstalled.addListener(() => {
     // Context menu for capturing full page
     chrome.contextMenus.create({
       id: "lexflow_capture_fullpage", 
-      title: "LexFlow: Capturar página completa",
+      title: "LexFlow: Capture full page",
       contexts: ["page"]
     });
   });
@@ -54,7 +54,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       type: 'basic',
       iconUrl: '/assets/icon-48.png',
       title: 'LexFlow Error',
-      message: 'Não foi possível capturar conteúdo desta página. Tente recarregar a página.'
+      message: 'Could not capture content from this page. Try reloading the page.'
     });
   }
 });
@@ -69,9 +69,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await storeCapturedContent(message.data);
         
         // Show success notification
-        const modeText = message.data.mode === 'fullpage' ? 'página completa' : 'texto selecionado';
+        const modeText = message.data.mode === 'fullpage' ? 'full page' : 'selected text';
         const charCount = message.data.text ? message.data.text.length : 0;
-        const notificationMessage = `Conteúdo capturado (${modeText}${charCount > 0 ? `, ${charCount} chars` : ''})`;
+        const notificationMessage = `Content captured (${modeText}${charCount > 0 ? `, ${charCount} chars` : ''})`;
         
         chrome.notifications?.create({
           type: 'basic',
@@ -88,7 +88,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           type: 'basic',
           iconUrl: '/assets/icon-48.png',
           title: 'LexFlow Error',
-          message: 'Falha ao salvar conteúdo capturado'
+          message: 'Failed to save captured content'
         });
         
         sendResponse({ success: false, error: error.message });
@@ -104,7 +104,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       type: 'basic',
       iconUrl: '/assets/icon-48.png',
       title: 'LexFlow Error',
-      message: message.error || 'Falha ao capturar conteúdo'
+      message: message.error || 'Failed to capture content'
     });
     
     sendResponse({ success: false, error: message.error });
@@ -150,7 +150,7 @@ async function storeCapturedContent(captureData) {
     const newItem = {
       id: Date.now(),
       timestamp: new Date().toISOString(),
-      title: captureData.title || 'Conteúdo Capturado',
+      title: captureData.title || 'Captured Content',
       url: captureData.url,
       text: captureData.text,
       mode: captureData.mode,

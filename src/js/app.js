@@ -778,27 +778,27 @@ class LexFlowApp {
 
     generateMockResult() {
         return `
-            <h4>📋 Resumo Executivo - Análise Jurídica</h4>
+            <h4>📋 Executive Summary - Legal Analysis</h4>
             
-            <p><strong>Artigos Analisados:</strong> ${this.selectedArticles.map(a => a.number).join(', ')}</p>
+            <p><strong>Articles Analyzed:</strong> ${this.selectedArticles.map(a => a.number).join(', ')}</p>
             
-            <h5>🎯 Principais Pontos:</h5>
+            <h5>🎯 Key Points:</h5>
             <ul>
-                <li><strong>Direitos Fundamentais:</strong> Os artigos estabelecem garantias constitucionais básicas, incluindo igualdade perante a lei e direitos sociais essenciais.</li>
-                <li><strong>Responsabilidade Civil:</strong> Há clara definição de responsabilidade por atos ilícitos e obrigação de reparar danos causados.</li>
-                <li><strong>Proteção ao Consumidor:</strong> Estabelece direitos básicos e responsabilidade objetiva dos fornecedores.</li>
+                <li><strong>Fundamental Rights:</strong> The articles establish basic constitutional guarantees, including equality before the law and essential social rights.</li>
+                <li><strong>Civil Liability:</strong> There is clear definition of liability for unlawful acts and obligation to repair caused damages.</li>
+                <li><strong>Consumer Protection:</strong> Establishes basic rights and objective liability of suppliers.</li>
             </ul>
             
-            <h5>⚖️ Implicações Práticas:</h5>
-            <p>A análise revela um sistema jurídico coerente que prioriza a proteção da dignidade humana e estabelece mecanismos claros de responsabilização. Para aplicação prática, recomenda-se:</p>
+            <h5>⚖️ Practical Implications:</h5>
+            <p>The analysis reveals a coherent legal system that prioritizes the protection of human dignity and establishes clear accountability mechanisms. For practical application, it is recommended to:</p>
             <ul>
-                <li>Verificar jurisprudência recente sobre interpretação dos dispositivos</li>
-                <li>Considerar princípios constitucionais na aplicação das normas</li>
-                <li>Atentar para prazos e procedimentos específicos</li>
+                <li>Check recent jurisprudence on interpretation of the provisions</li>
+                <li>Consider constitutional principles in the application of norms</li>
+                <li>Pay attention to specific deadlines and procedures</li>
             </ul>
             
-            <h5>🔍 Recomendações:</h5>
-            <p>Para casos concretos, sugere-se análise complementar da doutrina especializada e precedentes dos tribunais superiores.</p>
+            <h5>🔍 Recommendations:</h5>
+            <p>For concrete cases, complementary analysis of specialized doctrine and precedents from higher courts is suggested.</p>
         `;
     }
 
@@ -853,9 +853,9 @@ class LexFlowApp {
                 copyBtn.classList.remove('copied');
             }, 2000);
 
-            this.toastSystem.show('Resultado copiado para a área de transferência!', 'success');
+            this.toastSystem.show('Result copied to clipboard!', 'success');
         } catch (error) {
-            this.toastSystem.show('Erro ao copiar. Tente selecionar o texto manualmente.', 'error');
+            this.toastSystem.show('Error copying. Try selecting the text manually.', 'error');
         }
     }
 

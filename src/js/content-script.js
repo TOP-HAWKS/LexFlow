@@ -20,16 +20,16 @@ function getFullPageText() {
   // Try to get main content first
   const mainSelectors = [
     'main',
-    'article', 
+    'article',
     '[role="main"]',
     '.content',
     '.main-content',
     '#content',
     '#main'
   ];
-  
+
   let content = '';
-  
+
   // Try to find main content area
   for (const selector of mainSelectors) {
     const element = document.querySelector(selector);
@@ -38,19 +38,19 @@ function getFullPageText() {
       break;
     }
   }
-  
+
   // Fallback to body if no main content found
   if (!content) {
     content = document.body.innerText || document.body.textContent || '';
   }
-  
+
   const cleanText = content.trim();
-  
+
   // Limit to 50,000 characters
   if (cleanText.length > 50000) {
     return cleanText.substring(0, 50000) + "\n\n[Conteúdo truncado em 50.000 caracteres]";
   }
-  
+
   return cleanText;
 }
 
@@ -70,15 +70,15 @@ function extractPageMetadata() {
     author: '',
     publishDate: null
   };
-  
+
   // Extract meta tags
   const metaTags = document.querySelectorAll('meta');
   metaTags.forEach(meta => {
     const name = meta.getAttribute('name') || meta.getAttribute('property');
     const content = meta.getAttribute('content');
-    
+
     if (!name || !content) return;
-    
+
     switch (name.toLowerCase()) {
       case 'description':
       case 'og:description':
@@ -100,21 +100,21 @@ function extractPageMetadata() {
         break;
     }
   });
-  
+
   // Try to detect if this is a legal document
   const legalIndicators = [
     'lei', 'código', 'constituição', 'decreto', 'portaria', 'resolução',
     'artigo', 'art.', 'inciso', 'parágrafo', '§', 'jurisprudência',
     'tribunal', 'supremo', 'stf', 'stj', 'tjrs', 'tjsp'
   ];
-  
+
   const pageText = (metadata.title + ' ' + metadata.description).toLowerCase();
   const isLegalContent = legalIndicators.some(indicator => pageText.includes(indicator));
-  
+
   if (isLegalContent) {
-    metadata.sourceHint = metadata.sourceHint || 'Documento jurídico detectado';
+    metadata.sourceHint = metadata.sourceHint || 'Legal document detected';
   }
-  
+
   return metadata;
 }
 
@@ -126,7 +126,7 @@ function extractPageMetadata() {
  */
 function createCapturePayload(text, mode) {
   const metadata = extractPageMetadata();
-  
+
   return {
     type: "LEXFLOW_CAPTURE_PAYLOAD",
     data: {
@@ -160,33 +160,33 @@ function createCapturePayload(text, mode) {
 function detectJurisdiction(metadata) {
   const url = metadata.url.toLowerCase();
   const text = (metadata.title + ' ' + metadata.description).toLowerCase();
-  
+
   // Brazilian federal sites
-  if (url.includes('planalto.gov.br') || url.includes('senado.leg.br') || 
-      url.includes('camara.leg.br') || url.includes('stf.jus.br')) {
+  if (url.includes('planalto.gov.br') || url.includes('senado.leg.br') ||
+    url.includes('camara.leg.br') || url.includes('stf.jus.br')) {
     return { country: 'br', level: 'federal' };
   }
-  
+
   // Brazilian state sites
   if (url.includes('tjrs.jus.br') || text.includes('rio grande do sul')) {
     return { country: 'br', state: 'rs', level: 'state' };
   }
-  
+
   if (url.includes('tjsp.jus.br') || text.includes('são paulo')) {
     return { country: 'br', state: 'sp', level: 'state' };
   }
-  
+
   // Brazilian municipal sites
   if (url.includes('portoalegre.rs.gov.br') || text.includes('porto alegre')) {
     return { country: 'br', state: 'rs', city: 'porto-alegre', level: 'municipal' };
   }
-  
+
   // Default to Brazilian federal if legal content detected
   const legalIndicators = ['lei', 'código', 'constituição', 'decreto'];
   if (legalIndicators.some(indicator => text.includes(indicator))) {
     return { country: 'br', level: 'federal' };
   }
-  
+
   return null;
 }
 
@@ -210,15 +210,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendError("Nenhum texto selecionado ou texto muito curto (mínimo 10 caracteres)");
         return;
       }
-      
+
       const payload = createCapturePayload(text, 'selection');
       chrome.runtime.sendMessage(payload);
-      
+
     } catch (error) {
       console.error('Error capturing selection:', error);
-      sendError("Erro ao capturar texto selecionado: " + error.message);
+      sendError("Error capturing selected text: " + error.message);
     }
-  } 
+  }
   else if (message?.type === "LEXFLOW_GET_FULLPAGE") {
     try {
       const text = getFullPageText();
@@ -226,13 +226,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendError("Nenhum conteúdo legível encontrado nesta página");
         return;
       }
-      
+
       const payload = createCapturePayload(text, 'fullpage');
       chrome.runtime.sendMessage(payload);
-      
+
     } catch (error) {
       console.error('Error capturing full page:', error);
-      sendError("Erro ao capturar página completa: " + error.message);
+      sendError("Error capturing full page: " + error.message);
     }
   }
 });
@@ -256,11 +256,11 @@ function showCaptureSuccess(mode) {
     z-index: 10000;
     animation: lexflowSlideIn 0.3s ease;
   `;
-  
-  indicator.textContent = mode === 'selection' ? 
-    '✓ Texto capturado pelo LexFlow' : 
+
+  indicator.textContent = mode === 'selection' ?
+    '✓ Texto capturado pelo LexFlow' :
     '✓ Página capturada pelo LexFlow';
-  
+
   // Add animation styles
   if (!document.getElementById('lexflow-styles')) {
     const styles = document.createElement('style');
@@ -277,9 +277,9 @@ function showCaptureSuccess(mode) {
     `;
     document.head.appendChild(styles);
   }
-  
+
   document.body.appendChild(indicator);
-  
+
   // Remove after 3 seconds
   setTimeout(() => {
     indicator.style.animation = 'lexflowSlideOut 0.3s ease';

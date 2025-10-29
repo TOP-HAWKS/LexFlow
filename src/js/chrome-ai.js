@@ -59,7 +59,7 @@ export class ChromeAI {
         const availability = await this.checkAvailability();
         
         if (!availability.prompt) {
-            throw new Error('Prompt API não disponível. Verifique se você está usando Chrome Canary com as flags habilitadas.');
+            throw new Error('Prompt API not available. Please verify you are using Chrome Canary with the required flags enabled.');
         }
 
         const config = {
@@ -71,7 +71,7 @@ export class ChromeAI {
             return await self.ai.assistant.create(config);
         } catch (error) {
             console.error('Error creating AI assistant:', error);
-            throw new Error(`Erro ao criar assistente de IA: ${error.message}`);
+            throw new Error(`Error creating AI assistant: ${error.message}`);
         }
     }
 
@@ -84,7 +84,7 @@ export class ChromeAI {
         const availability = await this.checkAvailability();
         
         if (!availability.summarizer) {
-            throw new Error('Summarizer API não disponível. Verifique se você está usando Chrome Canary com as flags habilitadas.');
+            throw new Error('Summarizer API not available. Please verify you are using Chrome Canary with the required flags enabled.');
         }
 
         const config = {
@@ -99,7 +99,7 @@ export class ChromeAI {
             return await self.ai.summarizer.create(config);
         } catch (error) {
             console.error('Error creating AI summarizer:', error);
-            throw new Error(`Erro ao criar resumidor de IA: ${error.message}`);
+            throw new Error(`Error creating AI summarizer: ${error.message}`);
         }
     }
 
@@ -160,31 +160,31 @@ export class ChromeAI {
      * @returns {Object} Error response
      */
     handleAIError(error, operation) {
-        console.error(`Erro na operação ${operation}:`, error);
+        console.error(`Error in ${operation} operation:`, error);
 
         let errorType = 'unknown';
-        let message = 'Erro inesperado na IA. Tente novamente.';
+        let message = 'Unexpected AI error. Please try again.';
         let fallback = 'retry';
         let retryable = true;
 
         if (error.message.includes('not available') || error.message.includes('undefined')) {
             errorType = 'ai_not_available';
-            message = 'Chrome AI não está disponível. Verifique as configurações do Chrome Canary e as flags experimentais.';
+            message = 'Chrome AI is not available. Please check Chrome Canary settings and experimental flags.';
             fallback = 'setup_required';
             retryable = false;
         } else if (error.message.includes('quota') || error.message.includes('limit')) {
             errorType = 'rate_limited';
-            message = 'Limite de uso da IA atingido. Tente novamente em alguns minutos.';
+            message = 'AI usage limit reached. Please try again in a few minutes.';
             fallback = 'retry_later';
             retryable = true;
         } else if (error.message.includes('model')) {
             errorType = 'model_loading';
-            message = 'Modelo de IA não disponível. O modelo pode ainda estar sendo baixado.';
+            message = 'AI model not available. The model may still be downloading.';
             fallback = 'retry_later';
             retryable = true;
         } else if (error.message.includes('network') || error.message.includes('fetch')) {
             errorType = 'network_error';
-            message = 'Erro de rede. Verifique sua conexão.';
+            message = 'Network error. Please check your connection.';
             fallback = 'retry';
             retryable = true;
         }
@@ -214,8 +214,8 @@ export class ChromeAI {
             // Test Prompt API
             if (results.availability.prompt) {
                 const promptResult = await this.analyzeText(
-                    'Você é um assistente útil.',
-                    'Diga olá em português.'
+                    'You are a helpful assistant.',
+                    'Say hello in English.'
                 );
                 results.promptTest = {
                     success: promptResult.success,
@@ -226,7 +226,7 @@ export class ChromeAI {
             // Test Summarizer API
             if (results.availability.summarizer) {
                 const summaryResult = await this.summarizeText(
-                    'Este é um texto longo que precisa ser resumido para testar a funcionalidade do resumidor de IA integrado ao Chrome. O texto contém várias informações importantes que devem ser condensadas em um resumo conciso e útil.'
+                    'This is a long text that needs to be summarized to test the functionality of the AI summarizer integrated into Chrome. The text contains various important information that should be condensed into a concise and useful summary.'
                 );
                 results.summarizerTest = {
                     success: summaryResult.success,
@@ -247,18 +247,18 @@ export class ChromeAI {
      */
     getSetupInstructions() {
         return {
-            title: 'Configuração do Chrome AI (Gemini Nano)',
+            title: 'Chrome AI Setup (Gemini Nano)',
             steps: [
                 {
                     step: 1,
-                    title: 'Instalar Chrome Canary',
-                    description: 'Baixe e instale o Chrome Canary da página oficial do Google.',
+                    title: 'Install Chrome Canary',
+                    description: 'Download and install Chrome Canary from the official Google page.',
                     url: 'https://www.google.com/chrome/canary/'
                 },
                 {
                     step: 2,
-                    title: 'Habilitar Flags Experimentais',
-                    description: 'Acesse chrome://flags e habilite as seguintes flags:',
+                    title: 'Enable Experimental Flags',
+                    description: 'Go to chrome://flags and enable the following flags:',
                     flags: [
                         'chrome://flags/#prompt-api-for-gemini-nano',
                         'chrome://flags/#summarization-api-for-gemini-nano',
@@ -267,27 +267,27 @@ export class ChromeAI {
                 },
                 {
                     step: 3,
-                    title: 'Reiniciar o Navegador',
-                    description: 'Reinicie o Chrome Canary após habilitar as flags.'
+                    title: 'Restart Browser',
+                    description: 'Restart Chrome Canary after enabling the flags.'
                 },
                 {
                     step: 4,
-                    title: 'Aguardar Download do Modelo',
-                    description: 'O modelo Gemini Nano será baixado automaticamente na primeira execução.'
+                    title: 'Wait for Model Download',
+                    description: 'The Gemini Nano model will be downloaded automatically on first run.'
                 }
             ],
             troubleshooting: [
                 {
-                    problem: 'APIs não disponíveis',
-                    solution: 'Verifique se está usando Chrome Canary versão 120+ e se as flags estão habilitadas.'
+                    problem: 'APIs not available',
+                    solution: 'Verify you are using Chrome Canary version 120+ and the flags are enabled.'
                 },
                 {
-                    problem: 'Modelo não carrega',
-                    solution: 'Aguarde alguns minutos para o download do modelo ou reinicie o navegador.'
+                    problem: 'Model does not load',
+                    solution: 'Wait a few minutes for the model download or restart the browser.'
                 },
                 {
-                    problem: 'Erros de quota',
-                    solution: 'Aguarde alguns minutos antes de tentar novamente.'
+                    problem: 'Quota errors',
+                    solution: 'Wait a few minutes before trying again.'
                 }
             ]
         };
