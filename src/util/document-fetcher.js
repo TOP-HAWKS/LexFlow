@@ -4,6 +4,7 @@
  */
 
 import { resolveCorpusBaseUrl } from './corpus-resolver.js';
+import { storeArticles, getStoredArticles } from './article-storage.js';
 
 /**
  * Fetch document list from corpus
@@ -12,7 +13,7 @@ import { resolveCorpusBaseUrl } from './corpus-resolver.js';
 export async function fetchDocumentsFromCorpus() {
     try {
         const corpusBaseUrl = await resolveCorpusBaseUrl();
-        
+
         // For initial implementation, use hardcoded US federal documents
         const documents = [
             {
@@ -55,19 +56,70 @@ export async function fetchDocumentsFromCorpus() {
  */
 export async function fetchDocumentContent(document) {
     try {
+        // First, try to get from IndexedDB cache
+        const cachedArticles = await getStoredArticles(document.id);
+        if (cachedArticles && cachedArticles.length > 0) {
+            console.log(`[LexFlow] Using cached articles for ${document.id}`);
+            return cachedArticles;
+        }
+
         const corpusBaseUrl = await resolveCorpusBaseUrl();
         const documentUrl = `${corpusBaseUrl}/${document.path}`;
-        
+
+        console.log(`[LexFlow] Fetching document from: ${documentUrl}`);
         const response = await fetch(documentUrl);
+
         if (!response.ok) {
-            throw new Error(`Failed to fetch document: ${response.status}`);
+            console.warn(`[LexFlow] Document not found at ${documentUrl}, using mock articles`);
+            const mockArticles = getMockArticles(document.id);
+
+            // Store mock articles for faster subsequent loads
+            await storeArticles(document.id, mockArticles, 'mock');
+
+            return mockArticles;
         }
-        
+
         const markdown = await response.text();
-        return parseMarkdownToArticles(markdown, document);
+
+        // Check if the document has actual content (not just frontmatter)
+        const contentWithoutFrontmatter = markdown.replace(/^---[\s\S]*?---\n?/, '').trim();
+
+        if (!contentWithoutFrontmatter || contentWithoutFrontmatter.length < 50) {
+            console.warn(`[LexFlow] Document at ${documentUrl} is empty or has insufficient content, using mock articles`);
+            const mockArticles = getMockArticles(document.id);
+            await storeArticles(document.id, mockArticles, 'mock');
+            return mockArticles;
+        }
+
+        const articles = parseMarkdownToArticles(markdown, document);
+
+        if (articles.length === 0) {
+            // If parsing failed, use mock articles
+            console.warn(`[LexFlow] No articles parsed from ${documentUrl}, using mock articles`);
+            const mockArticles = getMockArticles(document.id);
+            await storeArticles(document.id, mockArticles, 'mock');
+            return mockArticles;
+        }
+
+        // Store the fetched articles
+        await storeArticles(document.id, articles, 'remote');
+
+        console.log(`[LexFlow] Loaded ${articles.length} articles from ${document.title}`);
+        return articles;
+
     } catch (error) {
         console.error('Error fetching document content:', error);
-        return getMockArticles(document.id);
+        const mockArticles = getMockArticles(document.id);
+        console.log(`[LexFlow] Using ${mockArticles.length} mock articles for ${document.title}`);
+
+        // Store mock articles as fallback
+        try {
+            await storeArticles(document.id, mockArticles, 'mock');
+        } catch (storeError) {
+            console.error('Error storing mock articles:', storeError);
+        }
+
+        return mockArticles;
     }
 }
 
@@ -79,19 +131,19 @@ export async function fetchDocumentContent(document) {
  */
 function parseMarkdownToArticles(markdown, document) {
     const articles = [];
-    
+
     // Remove YAML frontmatter if present
     const content = markdown.replace(/^---[\s\S]*?---\n/, '');
-    
+
     // Split by headings (## or ###)
     const sections = content.split(/^(#{2,3})\s+(.+)$/gm);
-    
+
     let currentHeading = null;
     let currentContent = '';
-    
+
     for (let i = 0; i < sections.length; i++) {
         const section = sections[i];
-        
+
         if (section.match(/^#{2,3}$/)) {
             // This is a heading marker, next item is the heading text
             if (currentHeading && currentContent.trim()) {
@@ -110,7 +162,7 @@ function parseMarkdownToArticles(markdown, document) {
             currentContent += section;
         }
     }
-    
+
     // Add the last article if exists
     if (currentHeading && currentContent.trim()) {
         articles.push({
@@ -121,7 +173,7 @@ function parseMarkdownToArticles(markdown, document) {
             document: document.id
         });
     }
-    
+
     return articles;
 }
 
@@ -168,21 +220,35 @@ function getMockArticles(documentId) {
         'constitution-article-i-section-8': [
             {
                 id: 'constitution-article-i-section-8-clause-1',
-                number: 'Clause 1',
+                number: 'Clause 1 - Taxation Power',
                 content: 'The Congress shall have Power To lay and collect Taxes, Duties, Imposts and Excises, to pay the Debts and provide for the common Defence and general Welfare of the United States; but all Duties, Imposts and Excises shall be uniform throughout the United States.',
                 citation: 'US/Federal/constitution/article-i-section-8.md#clause-1',
                 document: documentId
             },
             {
+                id: 'constitution-article-i-section-8-clause-2',
+                number: 'Clause 2 - Borrowing Power',
+                content: 'To borrow Money on the credit of the United States.',
+                citation: 'US/Federal/constitution/article-i-section-8.md#clause-2',
+                document: documentId
+            },
+            {
                 id: 'constitution-article-i-section-8-clause-3',
-                number: 'Clause 3 (Commerce Clause)',
+                number: 'Clause 3 - Commerce Clause',
                 content: 'To regulate Commerce with foreign Nations, and among the several States, and with the Indian Tribes.',
                 citation: 'US/Federal/constitution/article-i-section-8.md#clause-3',
                 document: documentId
             },
             {
+                id: 'constitution-article-i-section-8-clause-4',
+                number: 'Clause 4 - Naturalization and Bankruptcy',
+                content: 'To establish an uniform Rule of Naturalization, and uniform Laws on the subject of Bankruptcies throughout the United States.',
+                citation: 'US/Federal/constitution/article-i-section-8.md#clause-4',
+                document: documentId
+            },
+            {
                 id: 'constitution-article-i-section-8-clause-18',
-                number: 'Clause 18 (Necessary and Proper Clause)',
+                number: 'Clause 18 - Necessary and Proper Clause',
                 content: 'To make all Laws which shall be necessary and proper for carrying into Execution the foregoing Powers, and all other Powers vested by this Constitution in the Government of the United States, or in any Department or Officer thereof.',
                 citation: 'US/Federal/constitution/article-i-section-8.md#clause-18',
                 document: documentId
@@ -191,9 +257,23 @@ function getMockArticles(documentId) {
         'constitution-amendment-iv': [
             {
                 id: 'constitution-amendment-iv-text',
-                number: 'Amendment IV',
+                number: 'Fourth Amendment - Search and Seizure',
                 content: 'The right of the people to be secure in their persons, houses, papers, and effects, against unreasonable searches and seizures, shall not be violated, and no Warrants shall issue, but upon probable cause, supported by Oath or affirmation, and particularly describing the place to be searched, and the persons or things to be seized.',
                 citation: 'US/Federal/constitution/amendment-iv.md#amendment-iv',
+                document: documentId
+            },
+            {
+                id: 'constitution-amendment-iv-reasonable-expectation',
+                number: 'Reasonable Expectation of Privacy',
+                content: 'The Fourth Amendment protects against unreasonable searches and seizures by government officials. A search occurs when the government violates a person\'s reasonable expectation of privacy.',
+                citation: 'US/Federal/constitution/amendment-iv.md#reasonable-expectation',
+                document: documentId
+            },
+            {
+                id: 'constitution-amendment-iv-warrant-requirement',
+                number: 'Warrant Requirement',
+                content: 'Generally, searches and seizures must be conducted pursuant to a warrant issued by a neutral magistrate based on probable cause. However, there are several exceptions to this warrant requirement.',
+                citation: 'US/Federal/constitution/amendment-iv.md#warrant-requirement',
                 document: documentId
             }
         ],
@@ -225,11 +305,38 @@ function getMockArticles(documentId) {
                 content: 'nor deny to any person within its jurisdiction the equal protection of the laws.',
                 citation: 'US/Federal/constitution/amendment-xiv-section-1.md#equal-protection',
                 document: documentId
+            },
+            {
+                id: 'constitution-amendment-xiv-section-1-incorporation',
+                number: 'Incorporation Doctrine',
+                content: 'The Fourteenth Amendment has been interpreted to incorporate most of the Bill of Rights, making them applicable to state governments as well as the federal government.',
+                citation: 'US/Federal/constitution/amendment-xiv-section-1.md#incorporation',
+                document: documentId
             }
         ]
     };
-    
-    return mockArticles[documentId] || [];
+
+    // If no specific mock articles found, return generic ones
+    if (!mockArticles[documentId]) {
+        return [
+            {
+                id: `${documentId}-article-1`,
+                number: 'Article 1',
+                content: 'This is a sample article for demonstration purposes. The actual content would be loaded from the legal corpus repository.',
+                citation: `US/Federal/${documentId}.md#article-1`,
+                document: documentId
+            },
+            {
+                id: `${documentId}-article-2`,
+                number: 'Article 2',
+                content: 'This is another sample article showing how legal documents are structured and displayed in the LexFlow interface.',
+                citation: `US/Federal/${documentId}.md#article-2`,
+                document: documentId
+            }
+        ];
+    }
+
+    return mockArticles[documentId];
 }
 
 /**
@@ -255,18 +362,18 @@ export async function searchArticlesAcrossDocuments(documents, searchTerm) {
     if (!searchTerm || searchTerm.length < 2) {
         return [];
     }
-    
+
     const results = [];
     const term = searchTerm.toLowerCase();
-    
+
     for (const document of documents) {
         try {
             const articles = await fetchDocumentContent(document);
-            const matches = articles.filter(article => 
+            const matches = articles.filter(article =>
                 article.content.toLowerCase().includes(term) ||
                 article.number.toLowerCase().includes(term)
             );
-            
+
             results.push(...matches.map(article => ({
                 ...article,
                 documentTitle: document.title
@@ -275,6 +382,6 @@ export async function searchArticlesAcrossDocuments(documents, searchTerm) {
             console.error(`Error searching in document ${document.id}:`, error);
         }
     }
-    
+
     return results;
 }

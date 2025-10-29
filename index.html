@@ -20,8 +20,6 @@
                 ⚖️ LexFlow
             </div>
             <div class="user-info">
-                <span>👤 <span id="user-name">User</span></span>
-                <span>|</span>
                 <span>📍 <span id="user-location">Location</span></span>
                 <button class="settings-btn" id="settings-btn" title="Settings">⚙️</button>
             </div>
@@ -114,11 +112,7 @@
                                 </div>
                             </div>
 
-                            <div class="form-group" style="margin-top: 1rem;">
-                                <label class="form-label">🔍 Search Articles</label>
-                                <input type="text" class="form-control" id="search-input"
-                                    placeholder="Search articles...">
-                            </div>
+
                         </div>
 
                         <!-- Right Panel: Selected Articles -->
@@ -315,7 +309,7 @@
                         <div class="stat-label">Consulted Articles</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">{{n}}</div>
+                        <div class="stat-number" id="history-accuracy">{{n}}</div>
                         <div class="stat-label">AI Accuracy</div>
                     </div>
                 </div>

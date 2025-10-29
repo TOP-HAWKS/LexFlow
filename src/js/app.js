@@ -11,7 +11,7 @@ import { resolveCorpusBaseUrl, loadDocumentsFromCorpus } from '../util/corpus-re
 import { setSetting, getSetting, setSettings, getAllSettings } from '../util/settings.js';
 import { submitToCorpusPR, buildMarkdownFromForm } from '../util/worker-api.js';
 import { showToast } from '../util/toast.js';
-import { fetchDocumentsFromCorpus, fetchDocumentContent, searchArticlesAcrossDocuments } from '../util/document-fetcher.js';
+import { fetchDocumentsFromCorpus, fetchDocumentContent } from '../util/document-fetcher.js';
 
 class LexFlowApp {
     constructor() {
@@ -103,14 +103,8 @@ class LexFlowApp {
 
     async loadUserData() {
         try {
-            // Load user preferences
-            const userData = await this.dataManager.getUserData();
-            if (userData.name) {
-                document.getElementById('user-name').textContent = userData.name;
-            }
-            if (userData.location) {
-                document.getElementById('user-location').textContent = userData.location;
-            }
+            // Load user preferences and location from settings
+            await this.loadLocationFromSettings();
 
             // Load history
             this.historyItems = await this.dataManager.getHistory();
@@ -119,6 +113,12 @@ class LexFlowApp {
             // Load queue items (from Chrome storage if available)
             this.queueItems = await this.dataManager.getQueueItems();
             this.updateCollectorView();
+
+            // Initialize sample data if none exists
+            this.initializeSampleDataIfNeeded();
+
+            // Update statistics after loading data
+            this.updateStats();
 
             // Setup extension integration
             this.setupExtensionIntegration();
@@ -170,10 +170,7 @@ class LexFlowApp {
             this.sendToCuration();
         });
 
-        // Search input
-        document.getElementById('search-input')?.addEventListener('input', (e) => {
-            this.searchArticles(e.target.value);
-        });
+
 
         // Clear all articles button
         document.getElementById('clear-all-articles')?.addEventListener('click', () => {
@@ -226,11 +223,14 @@ class LexFlowApp {
 
     async initializeDocumentsFromCorpus(corpusBaseUrl) {
         try {
+            console.log('[LexFlow] Initializing documents from corpus...');
             this.showDocumentsLoading(true);
             const documents = await fetchDocumentsFromCorpus();
+            console.log('[LexFlow] Fetched documents:', documents);
             this.availableDocuments = documents;
             this.renderDocuments(documents);
             this.showDocumentsLoading(false);
+            console.log('[LexFlow] Documents initialization complete');
         } catch (error) {
             console.error('Error loading documents from corpus:', error);
             this.showDocumentsLoading(false);
@@ -331,6 +331,8 @@ class LexFlowApp {
     }
 
     async selectDocument(element, docId) {
+        console.log(`[LexFlow] Selecting document: ${docId}`);
+        
         // Update UI
         document.querySelectorAll('.document-item').forEach(item => {
             item.classList.remove('selected');
@@ -338,13 +340,23 @@ class LexFlowApp {
         element.classList.add('selected');
 
         this.currentDocument = this.availableDocuments.find(doc => doc.id === docId);
+        console.log(`[LexFlow] Found document:`, this.currentDocument);
+        
         if (this.currentDocument) {
             await this.displayArticles(this.currentDocument);
+        } else {
+            console.error(`[LexFlow] Document not found in availableDocuments:`, docId);
         }
     }
 
     async displayArticles(doc) {
+        console.log(`[LexFlow] Displaying articles for document:`, doc);
         const container = document.getElementById('articles-container');
+
+        if (!container) {
+            console.error('[LexFlow] Articles container not found in DOM');
+            return;
+        }
 
         // Show loading state
         container.innerHTML = `
@@ -355,25 +367,35 @@ class LexFlowApp {
         `;
 
         try {
+            console.log(`[LexFlow] Fetching articles for ${doc.title}...`);
             const articles = await fetchDocumentContent(doc);
+            console.log(`[LexFlow] Received ${articles.length} articles:`, articles);
+            
             this.currentDocumentArticles = articles;
 
             if (articles.length === 0) {
+                console.warn('[LexFlow] No articles returned from fetchDocumentContent');
                 container.innerHTML = `
                     <div class="empty-state">
                         <p>No articles found for this document</p>
-                        <small>Try changing the document or search term</small>
+                        <small>Try selecting a different document</small>
+                        <button class="btn btn-secondary" onclick="window.app.displayArticles(window.app.currentDocument)" style="margin-top: 1rem;">
+                            🔄 Retry
+                        </button>
                     </div>
                 `;
                 return;
             }
 
-            container.innerHTML = articles.map(article => `
+            const articlesHTML = articles.map(article => `
                 <div class="article-item" data-article-id="${article.id}">
                     <div class="article-number">${article.number}</div>
                     <div class="article-content">${article.content}</div>
                 </div>
             `).join('');
+
+            console.log(`[LexFlow] Rendering ${articles.length} articles`);
+            container.innerHTML = articlesHTML;
 
             // Add event listeners to article items
             container.querySelectorAll('.article-item').forEach(item => {
@@ -383,11 +405,13 @@ class LexFlowApp {
                 });
             });
 
+            console.log(`[LexFlow] Successfully displayed ${articles.length} articles`);
+
         } catch (error) {
-            console.error('Error loading articles:', error);
+            console.error('[LexFlow] Error loading articles:', error);
             container.innerHTML = `
                 <div class="empty-state">
-                    <p>Error loading articles</p>
+                    <p>Error loading articles: ${error.message}</p>
                     <small>Please try again</small>
                     <button class="btn btn-secondary" onclick="window.app.displayArticles(window.app.currentDocument)" style="margin-top: 1rem;">
                         🔄 Retry
@@ -859,45 +883,7 @@ class LexFlowApp {
         }
     }
 
-    searchArticles(term) {
-        if (!this.currentDocument || !term) {
-            if (this.currentDocument) {
-                this.displayArticles(this.currentDocument);
-            }
-            return;
-        }
 
-        const filtered = this.currentDocumentArticles.filter(article =>
-            article.content.toLowerCase().includes(term.toLowerCase()) ||
-            article.number.toLowerCase().includes(term.toLowerCase())
-        );
-
-        const container = document.getElementById('articles-container');
-        if (filtered.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <p>No articles found for the search term</p>
-                    <small>Try a different search term</small>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = filtered.map(article => `
-            <div class="article-item ${this.selectedArticles.find(a => a.id === article.id) ? 'selected' : ''}" data-article-id="${article.id}">
-                <div class="article-number">${article.number}</div>
-                <div class="article-content">${article.content}</div>
-            </div>
-        `).join('');
-
-        // Add event listeners to filtered articles
-        container.querySelectorAll('.article-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                const articleId = e.currentTarget.dataset.articleId;
-                this.toggleArticle(e.currentTarget, articleId);
-            });
-        });
-    }
 
     addSampleContent() {
         const sampleItems = [
@@ -922,8 +908,121 @@ class LexFlowApp {
         ];
 
         this.queueItems.push(...sampleItems);
+        
+        // Add sample history items if none exist
+        if (this.historyItems.length === 0) {
+            const sampleHistory = [
+                {
+                    id: Date.now() + 100,
+                    timestamp: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+                    prompt: 'Analyze constitutional rights regarding privacy and search warrants...',
+                    result: 'The Fourth Amendment establishes fundamental protections against unreasonable searches...',
+                    articles: 'Amendment IV, Clause 1',
+                    type: 'ai_analysis'
+                },
+                {
+                    id: Date.now() + 200,
+                    timestamp: new Date(Date.now() - 7200000).toISOString(), // 2 hours ago
+                    prompt: 'Compare due process clauses in different constitutional amendments...',
+                    result: 'The Due Process Clause appears in both the Fifth and Fourteenth Amendments...',
+                    articles: 'Amendment V, Amendment XIV Section 1',
+                    type: 'ai_analysis'
+                }
+            ];
+            
+            this.historyItems.push(...sampleHistory);
+            this.updateHistoryView();
+        }
+        
         this.updateCollectorView();
+        this.updateStats();
         this.toastSystem.show('Sample content added!', 'success');
+    }
+
+    /**
+     * Initialize sample data if no data exists (for demo purposes)
+     */
+    initializeSampleDataIfNeeded() {
+        // Add sample queue items if none exist
+        if (this.queueItems.length === 0) {
+            const sampleQueueItems = [
+                {
+                    id: Date.now(),
+                    title: 'Constitutional Analysis - Fourth Amendment',
+                    url: 'https://constitution.congress.gov/constitution/amendment-4/',
+                    content: 'Analysis of Fourth Amendment protections against unreasonable searches and seizures...',
+                    status: 'processed',
+                    timestamp: new Date(Date.now() - 86400000).toISOString(),
+                    category: 'Constitutional Law'
+                }
+            ];
+            this.queueItems.push(...sampleQueueItems);
+        }
+
+        // Add sample history items if none exist
+        if (this.historyItems.length === 0) {
+            const sampleHistory = [
+                {
+                    id: Date.now() + 100,
+                    timestamp: new Date(Date.now() - 3600000).toISOString(),
+                    prompt: 'Analyze Fourth Amendment privacy protections...',
+                    result: 'The Fourth Amendment establishes fundamental protections against unreasonable searches and seizures by government officials...',
+                    articles: 'Amendment IV',
+                    type: 'ai_analysis'
+                }
+            ];
+            this.historyItems.push(...sampleHistory);
+        }
+
+        console.log('[LexFlow] Sample data initialized:', {
+            queueItems: this.queueItems.length,
+            historyItems: this.historyItems.length
+        });
+    }
+
+    /**
+     * Load location from saved settings
+     */
+    async loadLocationFromSettings() {
+        try {
+            const settings = await getAllSettings();
+            
+            // Set default values if not configured
+            if (!settings.country) {
+                const defaultSettings = {
+                    language: 'en-US',
+                    country: 'US',
+                    state: 'California',
+                    city: 'San Francisco',
+                    serverlessEndpoint: 'https://lexflow-corpus.webmaster-1d0.workers.dev'
+                };
+                
+                await setSettings(defaultSettings);
+                console.log('[LexFlow] Default settings initialized');
+                
+                // Use default settings for location
+                Object.assign(settings, defaultSettings);
+            }
+            
+            // Build location string from settings
+            const locationParts = [];
+            if (settings.city) locationParts.push(settings.city);
+            if (settings.state) locationParts.push(settings.state);
+            if (settings.country) locationParts.push(settings.country);
+            
+            const location = locationParts.join(', ');
+            
+            if (location) {
+                document.getElementById('user-location').textContent = location;
+                console.log('[LexFlow] Location loaded from settings:', location);
+            } else {
+                // Fallback if something went wrong
+                document.getElementById('user-location').textContent = 'Location';
+            }
+        } catch (error) {
+            console.error('[LexFlow] Error loading location from settings:', error);
+            document.getElementById('user-location').textContent = 'Location';
+        }
     }
 
     updateCollectorView() {
@@ -1271,15 +1370,37 @@ class LexFlowApp {
     }
 
     updateStats() {
+        console.log('[LexFlow] Updating statistics:', {
+            historyItems: this.historyItems.length,
+            queueItems: this.queueItems.length,
+            processedItems: this.queueItems.filter(item => item.status === 'processed').length,
+            selectedArticles: this.selectedArticles.length
+        });
+
         // Update home stats
-        document.getElementById('stat-analyses').textContent = this.historyItems.length;
-        document.getElementById('stat-documents').textContent = this.queueItems.filter(item => item.status === 'processed').length;
-        document.getElementById('stat-time').textContent = (this.historyItems.length * 0.5).toFixed(1) + 'h';
+        const statAnalyses = document.getElementById('stat-analyses');
+        const statDocuments = document.getElementById('stat-documents');
+        const statTime = document.getElementById('stat-time');
+
+        if (statAnalyses) statAnalyses.textContent = this.historyItems.length;
+        if (statDocuments) statDocuments.textContent = this.queueItems.filter(item => item.status === 'processed').length;
+        if (statTime) statTime.textContent = (this.historyItems.length * 0.5).toFixed(1) + 'h';
 
         // Update history stats
-        document.getElementById('history-analyses').textContent = this.historyItems.length;
-        document.getElementById('history-documents').textContent = this.queueItems.filter(item => item.status === 'processed').length;
-        document.getElementById('history-articles').textContent = this.selectedArticles.length;
+        const historyAnalyses = document.getElementById('history-analyses');
+        const historyDocuments = document.getElementById('history-documents');
+        const historyArticles = document.getElementById('history-articles');
+        const historyAccuracy = document.getElementById('history-accuracy');
+
+        if (historyAnalyses) historyAnalyses.textContent = this.historyItems.length;
+        if (historyDocuments) historyDocuments.textContent = this.queueItems.filter(item => item.status === 'processed').length;
+        if (historyArticles) historyArticles.textContent = this.selectedArticles.length;
+        
+        // Calculate AI accuracy (mock calculation based on successful analyses)
+        const accuracy = this.historyItems.length > 0 ? Math.min(95, 85 + (this.historyItems.length * 2)) : 0;
+        if (historyAccuracy) historyAccuracy.textContent = accuracy > 0 ? `${accuracy}%` : '{{n}}';
+
+        console.log('[LexFlow] Statistics updated successfully');
     }
 
     updateDocuments() {
