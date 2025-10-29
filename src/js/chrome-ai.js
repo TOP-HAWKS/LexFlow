@@ -148,20 +148,34 @@ export class ChromeAI {
             throw new Error('Prompt API not available. Please verify you are using Chrome Canary with the required flags enabled.');
         }
 
+        // Ensure we always have outputLanguage
         const config = {
-            systemPrompt: systemPrompt,
-            outputLanguage: 'en', // Required for new API
+            systemPrompt: systemPrompt || 'You are a helpful assistant.',
+            outputLanguage: options.outputLanguage || 'en',
             ...options
         };
+
+        // Remove non-API options to avoid duplication
+        delete config.summaryMode;
 
         try {
             // Use LanguageModel API if available
             if (availability.languageModel) {
                 const langAvailability = await self.LanguageModel.availability({
-                    outputLanguage: 'en'
+                    outputLanguage: config.outputLanguage
                 });
+                
                 if (langAvailability === 'available') {
-                    return await self.LanguageModel.create(config);
+                    console.log('Creating LanguageModel with config:', config);
+                    const session = await self.LanguageModel.create(config);
+                    
+                    // Store session reference to prevent garbage collection
+                    if (!this.activeSessions) {
+                        this.activeSessions = new Set();
+                    }
+                    this.activeSessions.add(session);
+                    
+                    return session;
                 } else {
                     throw new Error(`LanguageModel not available: ${langAvailability}`);
                 }
@@ -174,6 +188,13 @@ export class ChromeAI {
             throw new Error('No compatible AI API available or ready');
         } catch (error) {
             console.error('Error creating AI assistant:', error);
+            console.error('Config used:', config);
+            
+            // Handle specific GPU blocked error
+            if (error.message.includes('GPU is blocked') || error.name === 'NotAllowedError') {
+                throw new Error('GPU access is blocked. This may be due to system security settings or hardware limitations. Try restarting Chrome Canary or check system GPU settings.');
+            }
+            
             throw new Error(`Error creating AI assistant: ${error.message}`);
         }
     }
@@ -222,21 +243,85 @@ export class ChromeAI {
      * @returns {Object} Analysis result
      */
     async analyzeText(systemPrompt, userText, options = {}) {
+        let assistant = null;
+        
         try {
-            const assistant = await this.createAssistant(systemPrompt, options);
-            const result = await assistant.prompt(userText);
+            console.log('Starting analyzeText with:', { systemPrompt: systemPrompt?.substring(0, 100), userText: userText?.substring(0, 100), options });
+            
+            // Validate inputs first
+            if (!userText || userText.trim().length === 0) {
+                throw new Error('User text is required and cannot be empty');
+            }
 
-            // Reset retry count on success
-            this.retryCount = 0;
+            // Retry logic for session creation and prompt execution
+            let lastError = null;
+            const maxRetries = 3;
+            
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    console.log(`Attempt ${attempt}/${maxRetries}: Creating assistant...`);
+                    assistant = await this.createAssistant(systemPrompt, options);
+                    console.log('Assistant created successfully');
+                    
+                    // Add a small delay to ensure session is ready
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    console.log('Sending prompt to assistant...');
+                    const result = await assistant.prompt(userText);
+                    console.log('Prompt completed successfully, result length:', result?.length);
 
-            return {
-                success: true,
-                result: result,
-                source: 'chrome-ai',
-                timestamp: new Date().toISOString()
-            };
+                    // Reset retry count on success
+                    this.retryCount = 0;
+
+                    return {
+                        success: true,
+                        result: result,
+                        source: 'chrome-ai',
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                } catch (attemptError) {
+                    console.warn(`Attempt ${attempt} failed:`, attemptError.message);
+                    lastError = attemptError;
+                    
+                    // If session was destroyed, try creating a new one
+                    if (attemptError.message.includes('session has been destroyed') && attempt < maxRetries) {
+                        console.log('Session destroyed, will retry with new session...');
+                        assistant = null;
+                        await new Promise(resolve => setTimeout(resolve, 500)); // Wait before retry
+                        continue;
+                    }
+                    
+                    // If GPU is blocked, don't retry
+                    if (attemptError.message.includes('GPU is blocked') || attemptError.name === 'NotAllowedError') {
+                        throw attemptError;
+                    }
+                    
+                    // For other errors, retry with exponential backoff
+                    if (attempt < maxRetries) {
+                        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+                        console.log(`Waiting ${delay}ms before retry...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+            
+            // If all retries failed, throw the last error
+            throw lastError || new Error('All retry attempts failed');
+            
         } catch (error) {
+            console.error('Error in analyzeText:', error);
+            console.error('Error details:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            });
             return this.handleAIError(error, 'analyze');
+        } finally {
+            // Clean up session reference if needed
+            if (assistant && this.activeSessions) {
+                this.activeSessions.delete(assistant);
+            }
         }
     }
 
@@ -278,25 +363,49 @@ export class ChromeAI {
         let fallback = 'retry';
         let retryable = true;
 
-        if (error.message.includes('not available') || error.message.includes('undefined')) {
+        // Detailed error analysis
+        const errorMessage = error.message || '';
+        const errorName = error.name || '';
+
+        if (errorMessage.includes('not available') || errorMessage.includes('undefined')) {
             errorType = 'ai_not_available';
             message = 'Chrome AI is not available. Please check Chrome Canary settings and experimental flags.';
             fallback = 'setup_required';
             retryable = false;
-        } else if (error.message.includes('quota') || error.message.includes('limit')) {
+        } else if (errorMessage.includes('quota') || errorMessage.includes('limit') || errorMessage.includes('rate')) {
             errorType = 'rate_limited';
             message = 'AI usage limit reached. Please try again in a few minutes.';
             fallback = 'retry_later';
             retryable = true;
-        } else if (error.message.includes('model')) {
+        } else if (errorMessage.includes('model') || errorMessage.includes('download')) {
             errorType = 'model_loading';
             message = 'AI model not available. The model may still be downloading.';
             fallback = 'retry_later';
             retryable = true;
-        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
             errorType = 'network_error';
             message = 'Network error. Please check your connection.';
             fallback = 'retry';
+            retryable = true;
+        } else if (errorMessage.includes('GPU is blocked') || errorName === 'NotAllowedError') {
+            errorType = 'gpu_blocked';
+            message = 'GPU access is blocked. This may be due to system security settings, hardware limitations, or Chrome security policies. Try restarting Chrome Canary or check system GPU settings.';
+            fallback = 'restart_required';
+            retryable = false;
+        } else if (errorMessage.includes('session has been destroyed') || errorMessage.includes('session') && errorMessage.includes('destroyed')) {
+            errorType = 'session_destroyed';
+            message = 'AI session was destroyed. This can happen due to memory limits or system policies. The system will automatically retry.';
+            fallback = 'auto_retry';
+            retryable = true;
+        } else if (errorName === 'UnknownError' || errorMessage.includes('generic failures')) {
+            errorType = 'session_error';
+            message = 'AI session error. This may be due to prompt length, content filtering, or session limits. Try with shorter text or different wording.';
+            fallback = 'retry_shorter';
+            retryable = true;
+        } else if (errorMessage.includes('prompt') || errorMessage.includes('input')) {
+            errorType = 'prompt_error';
+            message = 'Invalid prompt or input. Please check your text and try again.';
+            fallback = 'retry_different';
             retryable = true;
         }
 
@@ -306,6 +415,8 @@ export class ChromeAI {
             message: message,
             fallback: fallback,
             retryable: retryable,
+            originalError: errorMessage,
+            errorName: errorName,
             timestamp: new Date().toISOString()
         };
     }

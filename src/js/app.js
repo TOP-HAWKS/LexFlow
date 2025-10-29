@@ -774,7 +774,7 @@ class LexFlowApp {
 
             // Always use LanguageModel (assistant) since Summarizer has GPU issues
             let systemPrompt;
-            
+
             if (aiOptions.summaryMode) {
                 // Optimized prompt for summary tasks
                 systemPrompt = `You are a legal assistant specialized in creating executive summaries. 
@@ -801,7 +801,15 @@ class LexFlowApp {
             }
 
             const fullPrompt = userPrompt + '\n\nArticles for analysis:\n' + context;
-            result = await this.chromeAI.analyzeText(systemPrompt, fullPrompt, aiOptions);
+
+            // Add outputLanguage to options
+            const enhancedOptions = {
+                ...aiOptions,
+                outputLanguage: 'en'
+            };
+
+            console.log('Executing AI with enhanced options:', enhancedOptions);
+            result = await this.chromeAI.analyzeText(systemPrompt, fullPrompt, enhancedOptions);
 
             if (result.success) {
                 // Show result
@@ -824,42 +832,168 @@ class LexFlowApp {
 
                 this.toastSystem.show(`Analysis completed successfully! (${result.source})`, 'success');
             } else {
-                throw new Error(result.message || 'Error in AI analysis');
+                // Handle specific error types
+                console.error('AI analysis failed:', result);
+
+                let errorMessage = result.message || 'Error in AI analysis';
+                let toastType = 'error';
+
+                if (result.error === 'gpu_blocked') {
+                    errorMessage = 'GPU access blocked. Try restarting Chrome Canary or check system settings.';
+                    toastType = 'error';
+                } else if (result.error === 'session_destroyed') {
+                    errorMessage = 'AI session was destroyed. The system attempted automatic retry.';
+                    toastType = 'warning';
+                } else if (result.error === 'session_error') {
+                    errorMessage = 'AI session error. Try with shorter text or simpler wording.';
+                    toastType = 'warning';
+                } else if (result.error === 'rate_limited') {
+                    errorMessage = 'AI usage limit reached. Please wait a few minutes.';
+                    toastType = 'warning';
+                } else if (result.error === 'model_loading') {
+                    errorMessage = 'AI model is loading. Please try again in a moment.';
+                    toastType = 'info';
+                }
+
+                throw new Error(errorMessage);
             }
 
         } catch (error) {
             console.error('AI execution error:', error);
             thinkingDiv.style.display = 'none';
 
-            // Show info banner about Chrome AI availability
-            this.showAIUnavailableBanner();
+            // Show specific error information
+            this.showAIErrorBanner(error.message);
 
-            this.toastSystem.show('Chrome AI not available. Please check your Chrome settings.', 'warning', 8000);
+            // Show appropriate toast message
+            let toastMessage = 'Chrome AI error occurred.';
+            let toastType = 'error';
+
+            if (error.message.includes('GPU access blocked') || error.message.includes('GPU is blocked')) {
+                toastMessage = 'GPU access blocked. Try restarting Chrome Canary.';
+                toastType = 'error';
+            } else if (error.message.includes('session was destroyed') || error.message.includes('session destroyed')) {
+                toastMessage = 'AI session destroyed. System attempted automatic retry.';
+                toastType = 'warning';
+            } else if (error.message.includes('session error') || error.message.includes('shorter text')) {
+                toastMessage = 'Try with shorter text or simpler wording.';
+                toastType = 'warning';
+            } else if (error.message.includes('limit') || error.message.includes('quota')) {
+                toastMessage = 'AI usage limit reached. Please wait a few minutes.';
+                toastType = 'warning';
+            } else if (error.message.includes('not available') || error.message.includes('not functional')) {
+                toastMessage = 'Chrome AI not available. Please check your Chrome settings.';
+                toastType = 'warning';
+            }
+
+            this.toastSystem.show(toastMessage, toastType, 8000);
         }
     }
 
-    showAIUnavailableBanner() {
+    showAIErrorBanner(errorMessage) {
         const resultDiv = document.getElementById('ai-result');
         resultDiv.style.display = 'block';
 
-        document.getElementById('result-content').innerHTML = `
-            <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
-                <h4 style="color: #856404; margin: 0 0 0.5rem 0;">🔧 Chrome Built-in AI Not Available</h4>
-                <p style="color: #856404; margin: 0;">
-                    Chrome Built-in AI (Gemini Nano) is not available in your browser. 
-                    To use AI analysis features, please:
-                </p>
-                <ul style="color: #856404; margin: 0.5rem 0 0 1rem;">
-                    <li>Use Chrome Canary (version 120+)</li>
-                    <li>Enable the "Prompt API for Gemini Nano" flag</li>
-                    <li>Enable the "Built-in AI API" flag</li>
-                    <li>Restart your browser</li>
-                </ul>
-                <p style="color: #856404; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                    You can still use the "Send to Curation" feature to process your selected articles.
-                </p>
-            </div>
-        `;
+        let bannerContent = '';
+
+        if (errorMessage.includes('not available') || errorMessage.includes('not functional')) {
+            bannerContent = `
+                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #856404; margin: 0 0 0.5rem 0;">🔧 Chrome Built-in AI Not Available</h4>
+                    <p style="color: #856404; margin: 0;">
+                        Chrome Built-in AI (Gemini Nano) is not available in your browser. 
+                        To use AI analysis features, please:
+                    </p>
+                    <ul style="color: #856404; margin: 0.5rem 0 0 1rem;">
+                        <li>Use Chrome Canary (version 120+)</li>
+                        <li>Enable the "Prompt API for Gemini Nano" flag</li>
+                        <li>Enable the "Built-in AI API" flag</li>
+                        <li>Restart your browser</li>
+                    </ul>
+                    <p style="color: #856404; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        You can still use the "Send to Curation" feature to process your selected articles.
+                    </p>
+                </div>
+            `;
+        } else if (errorMessage.includes('GPU access blocked') || errorMessage.includes('GPU is blocked')) {
+            bannerContent = `
+                <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #721c24; margin: 0 0 0.5rem 0;">🚫 GPU Access Blocked</h4>
+                    <p style="color: #721c24; margin: 0;">
+                        The system cannot access the GPU required for AI processing. This can happen due to:
+                    </p>
+                    <ul style="color: #721c24; margin: 0.5rem 0 0 1rem;">
+                        <li>System security policies blocking GPU access</li>
+                        <li>Hardware limitations or driver issues</li>
+                        <li>Chrome security restrictions</li>
+                        <li>Other applications using the GPU</li>
+                    </ul>
+                    <p style="color: #721c24; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        <strong>Try:</strong> Restart Chrome Canary, close other GPU-intensive applications, or check system GPU settings.
+                    </p>
+                </div>
+            `;
+        } else if (errorMessage.includes('session was destroyed') || errorMessage.includes('session destroyed')) {
+            bannerContent = `
+                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #856404; margin: 0 0 0.5rem 0;">🔄 AI Session Destroyed</h4>
+                    <p style="color: #856404; margin: 0;">
+                        The AI session was unexpectedly destroyed. This can happen due to:
+                    </p>
+                    <ul style="color: #856404; margin: 0.5rem 0 0 1rem;">
+                        <li>Memory limitations or system resource constraints</li>
+                        <li>Chrome's automatic session cleanup</li>
+                        <li>System security policies</li>
+                    </ul>
+                    <p style="color: #856404; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        <strong>The system automatically attempted to retry.</strong> If the problem persists, try with shorter text or restart Chrome.
+                    </p>
+                </div>
+            `;
+        } else if (errorMessage.includes('session error') || errorMessage.includes('shorter text')) {
+            bannerContent = `
+                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #856404; margin: 0 0 0.5rem 0;">⚠️ AI Session Error</h4>
+                    <p style="color: #856404; margin: 0;">
+                        The AI encountered an error processing your request. This can happen due to:
+                    </p>
+                    <ul style="color: #856404; margin: 0.5rem 0 0 1rem;">
+                        <li>Text that is too long or complex</li>
+                        <li>Content that triggers safety filters</li>
+                        <li>Temporary AI session limits</li>
+                    </ul>
+                    <p style="color: #856404; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        <strong>Try:</strong> Select fewer articles, use simpler language, or wait a moment and try again.
+                    </p>
+                </div>
+            `;
+        } else if (errorMessage.includes('limit') || errorMessage.includes('quota')) {
+            bannerContent = `
+                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #856404; margin: 0 0 0.5rem 0;">⏱️ AI Usage Limit Reached</h4>
+                    <p style="color: #856404; margin: 0;">
+                        You've reached the AI usage limit for now. This is a temporary restriction.
+                    </p>
+                    <p style="color: #856404; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        <strong>Please wait a few minutes and try again.</strong> You can still use the "Send to Curation" feature.
+                    </p>
+                </div>
+            `;
+        } else {
+            bannerContent = `
+                <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; padding: 1rem; margin: 1rem 0;">
+                    <h4 style="color: #721c24; margin: 0 0 0.5rem 0;">❌ AI Error</h4>
+                    <p style="color: #721c24; margin: 0;">
+                        An unexpected error occurred: ${errorMessage}
+                    </p>
+                    <p style="color: #721c24; margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        Please try again or use the "Send to Curation" feature to continue.
+                    </p>
+                </div>
+            `;
+        }
+
+        document.getElementById('result-content').innerHTML = bannerContent;
 
         // Show send to curation button even without AI result
         document.getElementById('send-to-curation').style.display = 'inline-block';
