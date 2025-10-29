@@ -61,7 +61,7 @@ export class ChromeAI {
 
                         if (availability === 'available') {
                             // Try to create a test session
-                            const testSession = await self.LanguageModel.create({
+                            await self.LanguageModel.create({
                                 systemPrompt: 'You are a test assistant.',
                                 outputLanguage: 'en'
                             });
@@ -76,13 +76,15 @@ export class ChromeAI {
 
                 if (this.available.summarizer) {
                     try {
-                        // Check availability using the correct API
-                        const availability = await self.Summarizer.availability();
+                        // Check availability using the correct API with outputLanguage
+                        const availability = await self.Summarizer.availability({
+                            outputLanguage: 'en'
+                        });
                         console.log('Summarizer availability:', availability);
 
                         if (availability === 'available') {
                             // Try to create a test summarizer
-                            const testSummarizer = await self.Summarizer.create({
+                            await self.Summarizer.create({
                                 outputLanguage: 'en'
                             });
                             canUseSummarizer = true;
@@ -155,7 +157,9 @@ export class ChromeAI {
         try {
             // Use LanguageModel API if available
             if (availability.languageModel) {
-                const langAvailability = await self.LanguageModel.availability();
+                const langAvailability = await self.LanguageModel.availability({
+                    outputLanguage: 'en'
+                });
                 if (langAvailability === 'available') {
                     return await self.LanguageModel.create(config);
                 } else {
@@ -196,7 +200,9 @@ export class ChromeAI {
 
         try {
             // Check availability first
-            const sumAvailability = await self.Summarizer.availability();
+            const sumAvailability = await self.Summarizer.availability({
+                outputLanguage: 'en'
+            });
             if (sumAvailability !== 'available') {
                 throw new Error(`Summarizer not available: ${sumAvailability}`);
             }
