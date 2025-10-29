@@ -12,41 +12,188 @@ import { storeArticles, getStoredArticles } from './article-storage.js';
  */
 export async function fetchDocumentsFromCorpus() {
     try {
-        const corpusBaseUrl = await resolveCorpusBaseUrl();
+        console.log('[LexFlow] Fetching documents from GitHub repository...');
 
-        // For initial implementation, use hardcoded US federal documents
-        const documents = [
-            {
-                id: 'constitution-article-i-section-8',
-                title: 'U.S. Constitution - Article I, Section 8',
-                path: 'en-US/US/federal/constitution/article-i-section-8.md',
-                scope: 'Federal',
-                jurisdiction: 'US/Federal',
-                year: 1787
-            },
-            {
-                id: 'constitution-amendment-iv',
-                title: 'U.S. Constitution - Amendment IV',
-                path: 'en-US/US/federal/constitution/amendment-iv.md',
-                scope: 'Federal',
-                jurisdiction: 'US/Federal',
-                year: 1791
-            },
-            {
-                id: 'constitution-amendment-xiv-section-1',
-                title: 'U.S. Constitution - Amendment XIV, Section 1',
-                path: 'en-US/US/federal/constitution/amendment-xiv-section-1.md',
-                scope: 'Federal',
-                jurisdiction: 'US/Federal',
-                year: 1868
-            }
-        ];
+        // Try to fetch documents dynamically from GitHub API
+        let documents = await fetchDocumentsFromGitHub();
 
-        return documents;
+        if (documents.length === 0) {
+            console.warn('[LexFlow] No documents found in repository, using fallback');
+            documents = getFallbackDocuments();
+        }
+
+        // Filter documents by user language preference
+        const filteredDocuments = await filterDocumentsByLanguage(documents);
+
+        console.log(`[LexFlow] Returning ${filteredDocuments.length} documents after language filtering`);
+        return filteredDocuments;
     } catch (error) {
         console.error('Error fetching documents from corpus:', error);
         return getFallbackDocuments();
     }
+}
+
+/**
+ * Filter documents by user language preference
+ * @param {Array} documents - All available documents
+ * @returns {Promise<Array>} Filtered documents
+ */
+async function filterDocumentsByLanguage(documents) {
+    try {
+        // Import settings function dynamically
+        const settingsModule = await import('./settings.js');
+        const settings = await settingsModule.getAllSettings();
+
+        const userLanguage = settings.language || 'en-US';
+        console.log(`[LexFlow] Filtering documents for language: ${userLanguage}`);
+
+        // Filter documents by language, with fallback to all documents
+        const languageFiltered = documents.filter(doc => {
+            const matches = doc.language === userLanguage ||
+                !doc.language || // Include documents without language specified
+                doc.language === 'en-US'; // Always include English as fallback
+
+            if (matches) {
+                console.log(`[LexFlow] Including document: ${doc.title} (${doc.language || 'no language'})`);
+            }
+
+            return matches;
+        });
+
+        if (languageFiltered.length > 0) {
+            console.log(`[LexFlow] Filtered to ${languageFiltered.length} documents for language: ${userLanguage}`);
+            return languageFiltered;
+        } else {
+            console.log('[LexFlow] No documents found for user language, returning all documents');
+            return documents;
+        }
+    } catch (error) {
+        console.error('[LexFlow] Error filtering by language:', error);
+        return documents;
+    }
+}
+
+/**
+ * Fetch documents from GitHub repository using GitHub API
+ * @returns {Promise<Array>} Array of documents found in repository
+ */
+async function fetchDocumentsFromGitHub() {
+    const documents = [];
+
+    try {
+        // GitHub API base URL for the repository
+        const repoApiUrl = 'https://api.github.com/repos/viniciusvollrath/legal-corpus';
+
+        // Fetch directory structure for different languages and jurisdictions
+        const paths = [
+            'contents/en-US/us/federal',
+            'contents/pt-BR/br/federal'
+        ];
+
+        for (const path of paths) {
+            try {
+                console.log(`[LexFlow] Checking path: ${path}`);
+                const response = await fetch(`${repoApiUrl}/contents/${path}`);
+
+                if (response.ok) {
+                    const files = await response.json();
+
+                    // Filter for .md files
+                    const mdFiles = files.filter(file =>
+                        file.type === 'file' &&
+                        file.name.endsWith('.md') &&
+                        file.size > 100 // Only files with actual content
+                    );
+
+                    console.log(`[LexFlow] Found ${mdFiles.length} markdown files in ${path}`);
+
+                    // Convert GitHub API response to document objects
+                    for (const file of mdFiles) {
+                        const document = await createDocumentFromGitHubFile(file, path);
+                        if (document) {
+                            documents.push(document);
+                        }
+                    }
+                } else {
+                    console.log(`[LexFlow] Path ${path} not found or not accessible`);
+                }
+            } catch (pathError) {
+                console.warn(`[LexFlow] Error fetching ${path}:`, pathError);
+            }
+        }
+
+        return documents;
+    } catch (error) {
+        console.error('[LexFlow] Error fetching from GitHub API:', error);
+        return [];
+    }
+}
+
+/**
+ * Create document object from GitHub file
+ * @param {Object} file - GitHub API file object
+ * @param {string} basePath - Base path in repository
+ * @returns {Promise<Object|null>} Document object or null if invalid
+ */
+async function createDocumentFromGitHubFile(file, basePath) {
+    try {
+        // Extract metadata from file path and name
+        const pathParts = basePath.split('/');
+        const language = pathParts[1]; // en-US or pt-BR
+        const country = pathParts[2]; // us or br
+        const level = pathParts[3]; // federal
+
+        // Create document ID from filename
+        const fileName = file.name.replace('.md', '');
+        const documentId = `${country}-${level}-${fileName}`;
+
+        // Try to fetch the file content to get title from frontmatter
+        let title = fileName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+        try {
+            const contentResponse = await fetch(file.download_url);
+            if (contentResponse.ok) {
+                const content = await contentResponse.text();
+
+                // Extract title from YAML frontmatter
+                const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+                if (frontmatterMatch) {
+                    const yamlContent = frontmatterMatch[1];
+                    const titleMatch = yamlContent.match(/title:\s*["']?([^"'\n]+)["']?/);
+                    if (titleMatch) {
+                        title = titleMatch[1];
+                    }
+                }
+            }
+        } catch (contentError) {
+            console.warn(`[LexFlow] Could not fetch content for ${file.name}:`, contentError);
+        }
+
+        return {
+            id: documentId,
+            title: title,
+            path: `${basePath}/${file.name}`,
+            scope: level.charAt(0).toUpperCase() + level.slice(1),
+            jurisdiction: `${country.toUpperCase()}/${level.charAt(0).toUpperCase() + level.slice(1)}`,
+            year: extractYearFromContent(title) || new Date().getFullYear(),
+            language: language,
+            size: file.size,
+            lastModified: file.sha
+        };
+    } catch (error) {
+        console.error(`[LexFlow] Error creating document from file ${file.name}:`, error);
+        return null;
+    }
+}
+
+/**
+ * Extract year from document title or content
+ * @param {string} title - Document title
+ * @returns {number|null} Extracted year or null
+ */
+function extractYearFromContent(title) {
+    const yearMatch = title.match(/\b(19|20)\d{2}\b/);
+    return yearMatch ? parseInt(yearMatch[0]) : null;
 }
 
 /**
@@ -183,13 +330,44 @@ function parseMarkdownToArticles(markdown, document) {
  */
 function getFallbackDocuments() {
     return [
+        // US Federal documents
+        {
+            id: 'us-federal-obscenity-constitution-annotated',
+            title: 'Obscenity Constitution Annotated',
+            path: 'contents/en-US/us/federal/obscenity-constitution-annotated-congressgov-library-of-congress.md',
+            scope: 'Federal',
+            jurisdiction: 'US/Federal',
+            year: 2024,
+            language: 'en-US'
+        },
+        {
+            id: 'us-federal-state-power-alcohol',
+            title: 'State Power Over Alcohol and First Amendment Free Speech',
+            path: 'contents/en-US/us/federal/state-power-over-alcohol-and-first-amendment-free-speech-and-commercial-speech.md',
+            scope: 'Federal',
+            jurisdiction: 'US/Federal',
+            year: 2024,
+            language: 'en-US'
+        },
+        // Brazilian Federal documents
+        {
+            id: 'br-federal-l8245',
+            title: 'Lei 8245 - Lei do Inquilinato',
+            path: 'contents/pt-BR/br/federal/l8245.md',
+            scope: 'Federal',
+            jurisdiction: 'BR/Federal',
+            year: 1991,
+            language: 'pt-BR'
+        },
+        // Legacy documents for compatibility
         {
             id: 'constitution-article-i-section-8',
             title: 'U.S. Constitution - Article I, Section 8',
             path: 'en-US/US/federal/constitution/article-i-section-8.md',
             scope: 'Federal',
             jurisdiction: 'US/Federal',
-            year: 1787
+            year: 1787,
+            language: 'en-US'
         },
         {
             id: 'constitution-amendment-iv',
@@ -197,7 +375,8 @@ function getFallbackDocuments() {
             path: 'en-US/US/federal/constitution/amendment-iv.md',
             scope: 'Federal',
             jurisdiction: 'US/Federal',
-            year: 1791
+            year: 1791,
+            language: 'en-US'
         },
         {
             id: 'constitution-amendment-xiv-section-1',
@@ -205,7 +384,8 @@ function getFallbackDocuments() {
             path: 'en-US/US/federal/constitution/amendment-xiv-section-1.md',
             scope: 'Federal',
             jurisdiction: 'US/Federal',
-            year: 1868
+            year: 1868,
+            language: 'en-US'
         }
     ];
 }

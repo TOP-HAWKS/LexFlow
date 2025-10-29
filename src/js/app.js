@@ -177,6 +177,20 @@ class LexFlowApp {
             this.clearAllArticles();
         });
 
+        // Refresh documents button
+        document.getElementById('refresh-documents-btn')?.addEventListener('click', async () => {
+            // Clear any cached articles when refreshing documents
+            try {
+                const { clearStoredArticles } = await import('../util/article-storage.js');
+                await clearStoredArticles();
+                console.log('[LexFlow] Cleared article cache');
+            } catch (error) {
+                console.warn('[LexFlow] Could not clear article cache:', error);
+            }
+            
+            this.reloadDocuments();
+        });
+
         // Preset buttons
         document.querySelectorAll('.preset-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -981,6 +995,44 @@ class LexFlowApp {
     }
 
     /**
+     * Reload documents from corpus (useful when settings change)
+     */
+    async reloadDocuments() {
+        try {
+            console.log('[LexFlow] Reloading documents from corpus...');
+            this.showDocumentsLoading(true);
+            
+            // Clear current selection
+            this.currentDocument = null;
+            this.currentDocumentArticles = [];
+            this.selectedArticles = [];
+            
+            // Clear articles container
+            const articlesContainer = document.getElementById('articles-container');
+            if (articlesContainer) {
+                articlesContainer.innerHTML = `
+                    <div class="empty-state">
+                        <p>Select a document to view its articles</p>
+                        <small>Choose from the available documents on the left</small>
+                    </div>
+                `;
+            }
+            
+            // Fetch fresh documents
+            const documents = await fetchDocumentsFromCorpus();
+            this.availableDocuments = documents;
+            this.renderDocuments(documents);
+            this.showDocumentsLoading(false);
+            
+            console.log(`[LexFlow] Reloaded ${documents.length} documents`);
+        } catch (error) {
+            console.error('[LexFlow] Error reloading documents:', error);
+            this.showDocumentsLoading(false);
+            this.showDocumentsError();
+        }
+    }
+
+    /**
      * Load location from saved settings
      */
     async loadLocationFromSettings() {
@@ -1715,11 +1767,13 @@ class LexFlowApp {
             showToast('Settings saved successfully', 'success');
             this.closeSettingsModal();
 
-            // Re-resolve corpus URL if language changed
+            // Re-resolve corpus URL and reload documents if language changed
             try {
                 await resolveCorpusBaseUrl();
+                // Reload documents to reflect language changes
+                await this.reloadDocuments();
             } catch (error) {
-                console.warn('Could not re-resolve corpus URL:', error);
+                console.warn('Could not re-resolve corpus URL or reload documents:', error);
             }
 
         } catch (error) {
